@@ -240,197 +240,6 @@ def _configure_matplotlib_without_tex() -> None:
 _configure_matplotlib_without_tex()
 
 
-class _ExplorerLineTool:
-    """Interactive reference line shared by the parameter explorers."""
-
-    def __init__(self, axes, canvas, parent, refresh_callback) -> None:
-        self.axes = axes
-        self.canvas = canvas
-        self.refresh_callback = refresh_callback
-        self.visible = tk.BooleanVar(value=False)
-        self.slope_var = tk.StringVar(value="")
-        self.intersection_var = tk.StringVar(value="")
-        self.slope_function_var = tk.StringVar(value="k")
-        self.intersection_function_var = tk.StringVar(value="q")
-        self._points: list[tuple[float, float]] | None = None
-        self._data_available = False
-        self._active_point: int | None = None
-        self._slope: float | None = None
-        self._intersection: float | None = None
-
-        frame = ttk.LabelFrame(parent, text="Reference line y = kx + q", padding=4)
-        frame.grid(row=5, column=0, columnspan=5, padx=3, pady=(6, 0), sticky="ew")
-        for column in range(8):
-            frame.columnconfigure(column, weight=1 if column in {1, 3, 5, 7} else 0)
-        ttk.Checkbutton(
-            frame,
-            text="Show line",
-            variable=self.visible,
-            command=self._on_visibility_changed,
-        ).grid(row=0, column=0, padx=(0, 8), sticky="w")
-        ttk.Label(frame, text="Slope k").grid(row=0, column=1, sticky="e")
-        ttk.Entry(
-            frame, textvariable=self.slope_var, state="readonly", width=12
-        ).grid(row=0, column=2, padx=(3, 8), sticky="ew")
-        ttk.Label(frame, text="Intersection q").grid(row=0, column=3, sticky="e")
-        ttk.Entry(
-            frame, textvariable=self.intersection_var, state="readonly", width=12
-        ).grid(row=0, column=4, padx=(3, 8), sticky="ew")
-        ttk.Button(
-            frame, text="Recalculate", command=self._recalculate
-        ).grid(row=0, column=5, padx=(0, 8), sticky="w")
-        ttk.Label(frame, text="k function").grid(row=1, column=0, sticky="e")
-        ttk.Entry(
-            frame, textvariable=self.slope_function_var, width=14
-        ).grid(row=1, column=1, columnspan=2, padx=(3, 8), sticky="ew")
-        ttk.Label(frame, text="q function").grid(row=1, column=3, sticky="e")
-        ttk.Entry(
-            frame, textvariable=self.intersection_function_var, width=14
-        ).grid(row=1, column=4, columnspan=2, padx=(3, 8), sticky="ew")
-        ttk.Label(
-            frame, text="Drag the two markers in the graph; functions use k, q, and np"
-        ).grid(row=1, column=6, columnspan=2, padx=(0, 3), sticky="w")
-
-        self.canvas.mpl_connect("button_press_event", self._on_press)
-        self.canvas.mpl_connect("motion_notify_event", self._on_motion)
-        self.canvas.mpl_connect("button_release_event", self._on_release)
-
-    @staticmethod
-    def _format_value(value: float | None) -> str:
-        return "" if value is None or not np.isfinite(value) else f"{value:.8g}"
-
-    def _update_line_parameters(self) -> None:
-        if self._points is None:
-            self._slope = None
-            self._intersection = None
-        else:
-            (x1, y1), (x2, y2) = self._points
-            if not np.isfinite([x1, y1, x2, y2]).all() or x1 == x2:
-                self._slope = None
-                self._intersection = None
-            else:
-                self._slope = (y2 - y1) / (x2 - x1)
-                self._intersection = y1 - self._slope * x1
-        self.slope_var.set(self._format_value(self._slope))
-        self.intersection_var.set(self._format_value(self._intersection))
-
-    def set_data(self, values: list[tuple[float, float]]) -> None:
-        finite_values = [
-            (float(x), float(y))
-            for x, y in values
-            if np.isfinite(x) and np.isfinite(y)
-        ]
-        self._data_available = len(finite_values) >= 2
-        if self._points is None and self._data_available:
-            ordered = sorted(finite_values)
-            self._points = [ordered[0], ordered[-1]]
-            self._update_line_parameters()
-
-    def _on_visibility_changed(self) -> None:
-        self.refresh_callback()
-
-    def _recalculate(self) -> None:
-        if self._points is None or self._slope is None or self._intersection is None:
-            return
-        try:
-            scope = {
-                "__builtins__": {},
-                "np": np,
-                "k": self._slope,
-                "q": self._intersection,
-            }
-            slope = float(eval(self.slope_function_var.get().strip() or "k", scope))
-            intersection = float(
-                eval(self.intersection_function_var.get().strip() or "q", scope)
-            )
-        except (TypeError, ValueError, SyntaxError, NameError, ZeroDivisionError):
-            return
-        if not np.isfinite([slope, intersection]).all():
-            return
-        x1, _y1 = self._points[0]
-        x2, _y2 = self._points[1]
-        self._slope = slope
-        self._intersection = intersection
-        self._points = [
-            (x1, slope * x1 + intersection),
-            (x2, slope * x2 + intersection),
-        ]
-        self._update_line_parameters()
-        self.redraw()
-        self.canvas.draw_idle()
-
-    def _nearest_point(self, event) -> int | None:
-        if not self.visible.get() or self._points is None:
-            return None
-        if event.x is None or event.y is None:
-            return None
-        try:
-            display_points = self.axes.transData.transform(self._points)
-        except (ValueError, OverflowError):
-            return None
-        distances = [
-            float(np.hypot(display_x - event.x, display_y - event.y))
-            for display_x, display_y in display_points
-        ]
-        nearest = int(np.argmin(distances))
-        return nearest if distances[nearest] <= 12.0 else None
-
-    def _on_press(self, event) -> None:
-        if (
-            event.inaxes is self.axes
-            and event.button == 1
-            and (
-                getattr(event, "key", None) in {"control", "ctrl"}
-                or bool(getattr(getattr(event, "guiEvent", None), "state", 0) & 0x0004)
-            )
-        ):
-            self._active_point = self._nearest_point(event)
-
-    def _on_motion(self, event) -> None:
-        if self._active_point is None or event.inaxes is not self.axes:
-            return
-        if event.xdata is None or event.ydata is None or self._points is None:
-            return
-        if (
-            self.axes.get_xscale() == "log" and event.xdata <= 0
-        ) or (self.axes.get_yscale() == "log" and event.ydata <= 0):
-            return
-        self._points[self._active_point] = (float(event.xdata), float(event.ydata))
-        self._update_line_parameters()
-        self.redraw()
-        self.canvas.draw_idle()
-
-    def _on_release(self, event) -> None:
-        if event.button == 1:
-            self._active_point = None
-
-    def redraw(self) -> None:
-        if not self.visible.get() or not self._data_available or self._points is None:
-            return
-        (x1, y1), (x2, y2) = self._points
-        if self._slope is None or self._intersection is None:
-            x_values = np.full(200, x1)
-            y_values = np.linspace(y1, y2, 200)
-        else:
-            x_limits = self.axes.get_xlim()
-            x_values = np.linspace(x_limits[0], x_limits[1], 200)
-            y_values = self._slope * x_values + self._intersection
-        finite = np.isfinite(x_values) & np.isfinite(y_values)
-        if self.axes.get_xscale() == "log":
-            finite &= x_values > 0
-        if self.axes.get_yscale() == "log":
-            finite &= y_values > 0
-        if np.count_nonzero(finite) >= 2:
-            self.axes.plot(
-                x_values[finite], y_values[finite], "--", color="black",
-                linewidth=1.2, label="Reference line"
-            )
-        self.axes.plot(
-            [x1, x2], [y1, y2], "o", color="black", markersize=7,
-            markerfacecolor="white", markeredgewidth=1.4,
-            label="Line control points",
-        )
-
 
 class _ExplorerPointHover:
     """Show selected record metadata when hovering an explorer data point."""
@@ -14531,7 +14340,6 @@ class EISApplication:
             anchor="nw",
             justify=tk.LEFT,
         ).grid(row=1, column=0, sticky="ew", pady=(4, 2))
-        line_tool = _ExplorerLineTool(axes, canvas, controls, lambda: refresh_plot())
         point_hover = _ExplorerPointHover(
             axes, canvas, self._explorer_hover_metadata_preference, hover_info_var
         )
@@ -14724,12 +14532,8 @@ class EISApplication:
             axes.set_ylabel(" / ".join(y_labels))
             axes.set_xscale("log" if x_log.get() else "linear")
             axes.set_yscale("log" if y_log.get() else "linear")
-            line_tool.set_data(
-                [(point[0], point[1]) for point in plotted_points]
-            )
             point_hover.set_fields(self._explorer_hover_metadata_preference)
             point_hover.set_points(plotted_points)
-            line_tool.redraw()
             if plotted_groups and not hide_legend.get():
                 axes.legend(loc="best")
             canvas.draw_idle()
@@ -14759,7 +14563,6 @@ class EISApplication:
                     y_box.configure(values=[])
                     split_box.configure(values=["None"])
                 axes.clear()
-                line_tool.set_data([])
                 point_hover.set_points([])
                 canvas.draw_idle()
                 self._update_status(f"no {current_mode} parameters are available")
@@ -15078,7 +14881,6 @@ class EISApplication:
             anchor="nw",
             justify=tk.LEFT,
         ).grid(row=1, column=0, sticky="ew", pady=(4, 2))
-        line_tool = _ExplorerLineTool(axes, canvas, controls, lambda: refresh_plot())
         point_hover = _ExplorerPointHover(
             axes, canvas, self._explorer_hover_metadata_preference, hover_info_var
         )
@@ -15276,12 +15078,8 @@ class EISApplication:
             axes.set_ylabel(" / ".join(y_labels))
             axes.set_xscale("log" if x_log.get() else "linear")
             axes.set_yscale("log" if y_log.get() else "linear")
-            line_tool.set_data(
-                [(point[0], point[1]) for point in plotted_points]
-            )
             point_hover.set_fields(self._explorer_hover_metadata_preference)
             point_hover.set_points(plotted_points)
-            line_tool.redraw()
             if plotted_groups and not hide_legend.get():
                 axes.legend(loc="best")
             canvas.draw_idle()
