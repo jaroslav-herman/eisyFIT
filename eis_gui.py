@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
+import ast
 import copy
 from io import BytesIO
 import json
@@ -15,6 +16,7 @@ import subprocess
 import tempfile
 import threading
 import tkinter as tk
+import warnings
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Callable
 
@@ -239,6 +241,219 @@ def _configure_matplotlib_without_tex() -> None:
 
 _configure_matplotlib_without_tex()
 
+
+
+class _ExplorerCurveFitTool:
+    """Fit a user-defined equation through points picked in an explorer plot."""
+
+    _SAFE_NAMES = {
+        "abs", "acos", "acosh", "asin", "asinh", "atan", "atan2", "atanh",
+        "cbrt", "ceil", "cos", "cosh", "e", "exp", "expm1", "floor", "log",
+        "log10", "log1p", "log2", "pi", "sin", "sinh", "sqrt", "tan", "tanh",
+    }
+
+    @classmethod
+    def _base_scope(cls) -> dict[str, object]:
+        scope: dict[str, object] = {"np": np, "__builtins__": {}}
+        for name in cls._SAFE_NAMES:
+            value = getattr(np, name, None)
+            if value is not None:
+                scope[name] = value
+        return scope
+
+    def __init__(self, axes, canvas, parent, refresh_callback) -> None:
+        self.axes = axes
+        self.canvas = canvas
+        self.refresh_callback = refresh_callback
+        self.enabled = tk.BooleanVar(value=False)
+        self.equation_var = tk.StringVar(value="a*x + b")
+        self.result_var = tk.StringVar(value="")
+        self.status_var = tk.StringVar(value="")
+        self._picked: list[tuple[float, float]] = []
+        self._parameters: dict[str, float] | None = None
+        self._names: list[str] = []
+        self._last_equation: str = ""
+
+        frame = ttk.LabelFrame(parent, text="Curve fit", padding=4)
+        frame.grid(row=5, column=0, columnspan=5, padx=3, pady=(6, 0), sticky="ew")
+        for column in range(4):
+            frame.columnconfigure(column, weight=1 if column in {1, 3} else 0)
+        ttk.Checkbutton(
+            frame, text="Fit", variable=self.enabled, command=self._on_enabled_changed
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Entry(frame, textvariable=self.equation_var).grid(
+            row=0, column=1, columnspan=3, padx=(6, 0), sticky="ew"
+        )
+        ttk.Label(frame, text="Fit result").grid(row=1, column=0, sticky="w")
+        ttk.Entry(
+            frame, textvariable=self.result_var, state="readonly", width=32
+        ).grid(row=1, column=1, padx=(3, 0), sticky="ew")
+        ttk.Button(frame, text="Clear points", command=self.clear_points).grid(
+            row=1, column=2, padx=(6, 0), sticky="e"
+        )
+        ttk.Label(
+            frame,
+            text="Free parameters are the symbols other than x; pick as many points",
+        ).grid(row=2, column=0, columnspan=4, sticky="w")
+        ttk.Label(
+            frame, textvariable=self.status_var, foreground="#555555"
+        ).grid(row=3, column=0, columnspan=4, sticky="w")
+
+        self.equation_var.trace_add("write", lambda *_args: self._on_equation_changed())
+        self.canvas.mpl_connect("button_press_event", self._on_press)
+        self._on_equation_changed()
+
+    def _parse_names(self) -> list[str]:
+        try:
+            tree = ast.parse(self.equation_var.get(), mode="eval")
+        except (SyntaxError, ValueError):
+            return []
+        attribute_roots = {
+            node.value.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+        }
+        names = [
+            node.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Name)
+            and node.id not in attribute_roots
+        ]
+        return list(dict.fromkeys(
+            name for name in names
+            if name != "x" and name not in self._SAFE_NAMES
+        ))
+
+    def _on_equation_changed(self) -> None:
+        equation = self.equation_var.get().strip()
+        if equation != self._last_equation:
+            self._last_equation = equation
+            self._picked = []
+            self._parameters = None
+            self.result_var.set("")
+        self._update_status()
+        self.refresh_callback()
+
+    def _on_enabled_changed(self) -> None:
+        if not self.enabled.get():
+            self._parameters = None
+            self.result_var.set("")
+        self._picked = []
+        self._update_status()
+        self.refresh_callback()
+
+    def clear_points(self) -> None:
+        self._picked = []
+        self._parameters = None
+        self.result_var.set("")
+        self._update_status()
+        self.refresh_callback()
+
+    def _update_status(self) -> None:
+        if not self.enabled.get():
+            self.status_var.set("")
+            return
+        self._names = self._parse_names()
+        needed = len(self._names)
+        picked = len(self._picked)
+        if not self._names:
+            self.status_var.set("Invalid or parameter-free equation")
+        elif picked < needed:
+            self.status_var.set(
+                f"Pick {needed - picked} more point(s) "
+                f"({picked}/{needed} selected, free: {', '.join(self._names)})"
+            )
+        else:
+            self.status_var.set(
+                f"{picked} point(s) selected; extra points are least-squares fitted "
+                f"(free: {', '.join(self._names)})"
+            )
+
+    def _on_press(self, event) -> None:
+        if (
+            not self.enabled.get()
+            or event.inaxes is not self.axes
+            or event.button != 1
+            or event.xdata is None
+            or event.ydata is None
+        ):
+            return
+        self._picked.append((float(event.xdata), float(event.ydata)))
+        self._update_status()
+        self.refresh_callback()
+
+    def _fit(self) -> dict[str, float] | None:
+        self._names = self._parse_names()
+        equation = self.equation_var.get().strip()
+        if not self._names or len(self._picked) < len(self._names):
+            return None
+        try:
+            code = compile(equation, "<curve-fit>", "eval")
+            x_values = np.asarray([point[0] for point in self._picked], dtype=float)
+            y_values = np.asarray([point[1] for point in self._picked], dtype=float)
+            p0 = np.ones(len(self._names))
+            scale = max(abs(y_values).max(), 1.0)
+            p0 = p0 * (scale / max(abs(x_values).max(), 1e-12))
+
+            def model(x, *params) -> np.ndarray:
+                scope = self._base_scope()
+                scope.update(dict(zip(self._names, params)))
+                scope["x"] = x
+                return eval(code, scope)
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                fitted, _ = curve_fit(
+                    model, x_values, y_values, p0=p0, maxfev=20000
+                )
+        except (SyntaxError, TypeError, ValueError, RuntimeError, KeyError, NameError):
+            return None
+        if not np.isfinite(fitted).all():
+            return None
+        return dict(zip(self._names, (float(v) for v in fitted)))
+
+    def redraw(self) -> None:
+        if not self.enabled.get():
+            return
+        if not self._picked:
+            return
+        self._parameters = self._fit()
+        if self._parameters is not None:
+            self.result_var.set(
+                ", ".join(
+                    f"{name}={value:.6g}"
+                    for name, value in self._parameters.items()
+                )
+            )
+        x_values = np.asarray([point[0] for point in self._picked], dtype=float)
+        y_values = np.asarray([point[1] for point in self._picked], dtype=float)
+        if self._parameters is not None:
+            x_limits = self.axes.get_xlim()
+            curve_x = np.linspace(x_limits[0], x_limits[1], 400)
+            scope = self._base_scope()
+            scope["x"] = curve_x
+            scope.update(self._parameters)
+            try:
+                curve_y = eval(self.equation_var.get().strip(), scope)
+            except (SyntaxError, TypeError, ValueError, KeyError, NameError):
+                curve_y = None
+            if curve_y is not None:
+                curve_y = np.asarray(curve_y, dtype=float)
+                finite = np.isfinite(curve_x) & np.isfinite(curve_y)
+                if self.axes.get_xscale() == "log":
+                    finite &= curve_x > 0
+                if self.axes.get_yscale() == "log":
+                    finite &= curve_y > 0
+                if np.count_nonzero(finite) >= 2:
+                    self.axes.plot(
+                        curve_x[finite], curve_y[finite], "--", color="black",
+                        linewidth=1.2, label="Fit curve",
+                    )
+        self.axes.plot(
+            x_values, y_values, "o", color="black", markersize=7,
+            markerfacecolor="white", markeredgewidth=1.4, label="Fit points",
+        )
 
 
 class _ExplorerPointHover:
@@ -14340,6 +14555,7 @@ class EISApplication:
             anchor="nw",
             justify=tk.LEFT,
         ).grid(row=1, column=0, sticky="ew", pady=(4, 2))
+        curve_fit_tool = _ExplorerCurveFitTool(axes, canvas, controls, lambda: refresh_plot())
         point_hover = _ExplorerPointHover(
             axes, canvas, self._explorer_hover_metadata_preference, hover_info_var
         )
@@ -14534,6 +14750,7 @@ class EISApplication:
             axes.set_yscale("log" if y_log.get() else "linear")
             point_hover.set_fields(self._explorer_hover_metadata_preference)
             point_hover.set_points(plotted_points)
+            curve_fit_tool.redraw()
             if plotted_groups and not hide_legend.get():
                 axes.legend(loc="best")
             canvas.draw_idle()
@@ -14881,6 +15098,7 @@ class EISApplication:
             anchor="nw",
             justify=tk.LEFT,
         ).grid(row=1, column=0, sticky="ew", pady=(4, 2))
+        curve_fit_tool = _ExplorerCurveFitTool(axes, canvas, controls, lambda: refresh_plot())
         point_hover = _ExplorerPointHover(
             axes, canvas, self._explorer_hover_metadata_preference, hover_info_var
         )
@@ -15080,6 +15298,7 @@ class EISApplication:
             axes.set_yscale("log" if y_log.get() else "linear")
             point_hover.set_fields(self._explorer_hover_metadata_preference)
             point_hover.set_points(plotted_points)
+            curve_fit_tool.redraw()
             if plotted_groups and not hide_legend.get():
                 axes.legend(loc="best")
             canvas.draw_idle()
