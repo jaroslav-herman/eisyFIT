@@ -68,6 +68,9 @@ jobs:
               "eis_services.py",
               "ml/__init__.py",
               "ml/runtime_inference.py",
+              "ml/analysis/number_aware_pipeline_453_455_457_467_voltage/pipeline.joblib",
+              "ml/analysis/number_aware_pipeline_aem_we/pipeline.joblib",
+              "ml/analysis/number_aware_pipeline_flex_181/pipeline.joblib",
             }
           missing = required - names
           assert not missing, f"Missing from wheel: {sorted(missing)}"

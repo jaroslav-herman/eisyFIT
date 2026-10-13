@@ -67,3 +67,11 @@ include = ["ml*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.ico", "*.png", "*.svg"]
+"ml" = [
+    "analysis/number_aware_pipeline_453_455_457_467_voltage/*.joblib",
+    "analysis/number_aware_pipeline_453_455_457_467_voltage/*.json",
+    "analysis/number_aware_pipeline_aem_we/*.joblib",
+    "analysis/number_aware_pipeline_aem_we/*.json",
+    "analysis/number_aware_pipeline_flex_181/*.joblib",
+    "analysis/number_aware_pipeline_flex_181/*.json",
+]
