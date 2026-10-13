@@ -1,10 +1,11 @@
-## EIS Fitting
+## eisyFIT
 
-EIS Fitting is a desktop application for exploring, cleaning, and fitting
-electrochemical impedance spectroscopy (EIS) data exported by BioLogic as
-`.mpt` (PEIS) files. It combines an interactive Nyquist plot with circuit
-parameter editing, cycle-aware analysis, DRT-assisted outlier detection, and
-batch fitting, so spectra can be reviewed and fitted without leaving the GUI.
+eisyFIT (formerly EIS Fitting) is a desktop application for exploring, cleaning,
+and fitting electrochemical impedance spectroscopy (EIS) data exported by
+BioLogic as `.mpt` (PEIS) files. It combines an interactive Nyquist plot with
+circuit parameter editing, cycle-aware analysis, DRT-assisted outlier detection,
+and batch fitting, so spectra can be reviewed and fitted without leaving the
+GUI.
 
 The application:
 
@@ -15,7 +16,17 @@ The application:
 - Uses `bayes-drt2` ridge analysis to identify outliers and initialize circuit fits
 - Compares measured and fitted points at identical frequencies with residual connectors
 - Provides a sortable spectra explorer for cycle and acquisition metadata
+- Provides DRT and EEC fit-parameter explorers with an interactive curve fit tool
 - Exports fitted parameters and spectrum metadata to CSV and a ready-to-run Python script
+
+## What's new in 0.1.9
+
+- Interactive curve fit tool in the DRT and EEC fit-parameter explorers: type any
+  equation with free parameters (for example `a*x + b` or `a*exp(-b*x) + c`),
+  pick points in the plot, and the parameters are solved and the curve overlaid
+- Removed the non-functional reference line tool from the parameter explorers
+- Retrained the AEM-WE ML model on additional manually fitted PEIS samples
+- Renamed the repository to eisyFIT; installation from PyPI and GitHub is unchanged
 
 ## Installation
 
@@ -85,7 +96,7 @@ above, then open a new terminal and repeat `uv sync`.
 
 ## License
 
-EIS Fitting is licensed under the GNU General Public License v3.0 or later.
+eisyFIT is licensed under the GNU General Public License v3.0 or later.
 Its dependencies remain under their respective licenses; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the dependency license
 summary.

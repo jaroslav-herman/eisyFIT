@@ -7322,7 +7322,7 @@ class EISApplication:
         self.state = state
         self.control = state.control
         self.circuit = state.circuit
-        self.root.title(f"EIS Fitting — {loaded.dataset_label}")
+        self.root.title(f"eisyFIT — {loaded.dataset_label}")
         self.cycle_var.set(str(self.state.active_cycle))
         self._highlight_explorer_cycle(
             self.state.active_cycle,
@@ -7930,7 +7930,7 @@ class EISApplication:
             None,
         )
         project_name = Path(project_path).name if project_path else "Untitled"
-        self.root.title(f"EIS Fitting — {project_name}")
+        self.root.title(f"eisyFIT — {project_name}")
 
     def load_ml_results(self) -> None:
         directory = filedialog.askdirectory(
@@ -16781,7 +16781,7 @@ class EISApplication:
         self.project_path = project_path.resolve()
         self._saved_project_signature = self._project_signature()
         self.root.title(
-            f"EIS Fitting — {Path(project_path).name if project_path else 'Untitled'}"
+            f"eisyFIT — {Path(project_path).name if project_path else 'Untitled'}"
         )
         self._update_status(f"project saved as {project_path.name}")
 
@@ -17749,7 +17749,7 @@ def launch_nyquist_editor(
 ) -> None:
     root = tk.Tk()
     root.withdraw()
-    root.title("EIS Fitting")
+    root.title("eisyFIT")
     root.geometry("1220x760")
     root.deiconify()
     root.update()
