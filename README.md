@@ -54,8 +54,8 @@ Tk support. On some Linux distributions, Tk must be installed separately
 In PowerShell, Terminal, or a shell:
 
 ```text
-git clone https://github.com/jaroslav-herman/EIS_fitting.git
-cd EIS_fitting
+git clone https://github.com/jaroslav-herman/eisyFIT.git
+cd eisyFIT
 uv sync
 ```
 
