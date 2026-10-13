@@ -96,3 +96,8 @@ ml_cache_validation*/
 .env.*
 !.env.example
 *.local
+
+# ==========================
+# Build artifacts
+# ==========================
+*.egg-info/
