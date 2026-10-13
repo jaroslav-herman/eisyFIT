@@ -12,7 +12,7 @@ Use [run_deterministic_ml_pipeline.py](../../../run_deterministic_ml_pipeline.py
 ```powershell
 .\.venv\Scripts\python.exe run_deterministic_ml_pipeline.py `
   ".\467_III_cathode_etching_series_20min_Cell.eisfit.json.gz" `
-  --model ".\ml\analysis\number_aware_pipeline_455\pipeline.joblib" `
+  --model ".\ml\analysis\number_aware_pipeline_453_455_457_467_voltage\pipeline.joblib" `
   --results ".\467_III_cathode_etching_series_20min_Cell_ml_results.json" `
   --report ".\467_III_cathode_etching_series_20min_Cell_ml_fit_report.json"
 ```
