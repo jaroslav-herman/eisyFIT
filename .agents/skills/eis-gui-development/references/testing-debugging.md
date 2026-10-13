@@ -29,7 +29,7 @@ Run the narrow module with `-v`, then the suite when shared state or persistence
 ## Manual GUI check
 
 ```powershell
-.\.venv\Scripts\python.exe main.py .\PEIS_at_N2_flow_80_sccm_automated_01_PEIS.mpt --cycle 1
+.\.venv\Scripts\python.exe main.py <path-to-a-small-spectrum>.mpt --cycle 1
 ```
 
 Exercise the changed action, cancel/close path, cycle switch, explorer multi-selection, save/reload when state persists, and a second invocation. Check status text and terminal tracebacks. Do not treat a passing unit suite as evidence that layout, focus, event order, or background-thread behavior is correct.

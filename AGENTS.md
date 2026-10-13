@@ -56,10 +56,11 @@ rg -n "^(class|def) |^    def |<visible UI text>|<field_name>" eis_gui.py eis_mo
 .\.venv\Scripts\python.exe -m unittest tests.test_batch_stop -v
 ```
 
-During iteration, run the smallest relevant test module first, then the full suite for changes to persistence, shared state, fitting, or ML contracts. For GUI changes, also launch the included small spectrum and exercise the changed interaction:
+During iteration, run the smallest relevant test module first, then the full suite for changes to persistence, shared state, fitting, or ML contracts. For GUI changes, also launch the application with a small spectrum from disk
+and exercise the changed interaction:
 
 ```powershell
-.\.venv\Scripts\python.exe main.py .\PEIS_at_N2_flow_80_sccm_automated_01_PEIS.mpt --cycle 1
+.\.venv\Scripts\python.exe main.py <path-to-a-small-spectrum>.mpt --cycle 1
 ```
 
 Unit tests do not verify Tk layout, focus, selection retention, or event ordering.

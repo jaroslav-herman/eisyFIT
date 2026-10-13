@@ -82,10 +82,10 @@ From the repository directory, run:
 uv run python main.py
 ```
 
-To open a BioLogic file immediately and select a cycle:
+To open a BioLogic file immediately and select a cycle, pass its path:
 
 ```text
-uv run python main.py PEIS_at_N2_flow_80_sccm_automated_01_PEIS.mpt --cycle 1
+uv run python main.py path/to/spectrum.mpt --cycle 1
 ```
 
 On Windows, `run_gui.cmd` can also be double-clicked. It checks that `uv` is
@@ -107,7 +107,7 @@ The command-line entry point also accepts options for the initial control
 channel, outlier threshold, and equivalent-circuit model:
 
 ```text
-uv run python main.py PEIS_at_N2_flow_80_sccm_automated_01_PEIS.mpt --cycle 1 --threshold 1.0 --circuit "R0-L0-p(R1,CPE1)"
+uv run python main.py path/to/spectrum.mpt --cycle 1 --threshold 1.0 --circuit "R0-L0-p(R1,CPE1)"
 ```
 
 ### GUI controls
