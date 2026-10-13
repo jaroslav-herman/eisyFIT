@@ -94,6 +94,55 @@ available and starts the application from the repository directory.
 If `uv` is not available, install it using the official instructions linked
 above, then open a new terminal and repeat `uv sync`.
 
+## References and scientific works
+
+eisyFIT builds on published methods from the electrochemical impedance
+community. If you use eisyFIT in published work, please cite the relevant
+papers behind the methods you use:
+
+- **Equivalent-circuit fitting and Lin-KK validation** — `impedance.py`:
+  Murbach, M. D., Gerwe, B., Dawson-Elli, N., & Schwartz, D. T. (2020).
+  impedance.py: A Python package for electrochemical impedance analysis.
+  *Journal of Open Source Software, 5*(52), 2349.
+  [https://doi.org/10.21105/joss.02349](https://doi.org/10.21105/joss.02349)
+- **Kramers–Kronig validation** (Lin-KK algorithm used for data validation):
+  Schönleber, M., Klotz, D., & Ivers-Tiffée, E. (2014). A Method for Improving
+  the Robustness of Linear Kramers-Kronig Validity Tests.
+  *Electrochimica Acta, 131*, 20–27.
+  [https://doi.org/10.1016/j.electacta.2014.01.034](https://doi.org/10.1016/j.electacta.2014.01.034)
+- **bayes-drt2 ridge analysis, outlier detection, and DRT-assisted EEC
+  initialization** — hierarchical Bayesian DRT inversion:
+  Huang, J., Papac, M., & O’Hayre, R. (2021). Towards robust autonomous
+  impedance spectroscopy analysis: A calibrated hierarchical Bayesian approach
+  for electrochemical impedance spectroscopy (EIS) inversion.
+  *Electrochimica Acta, 367*, 137493.
+  [https://doi.org/10.1016/j.electacta.2020.137493](https://doi.org/10.1016/j.electacta.2020.137493)
+- **hyperparametric ridge regression** (used by `bayes_drt2.ridge_fit` with
+  hyperparameters):
+  Ciucci, F., & Chen, C. (2015). Analysis of electrochemical impedance
+  spectroscopy data using the distribution of relaxation times: A Bayesian and
+  hierarchical Bayesian approach. *Electrochimica Acta, 167*, 439–454.
+  [https://doi.org/10.1016/j.electacta.2015.03.123](https://doi.org/10.1016/j.electacta.2015.03.123);
+  Effat, M. B., & Ciucci, F. (2017). Bayesian and Hierarchical Bayesian Based
+  Regularization for Deconvolving the Distribution of Relaxation Times from
+  Electrochemical Impedance Spectroscopy Data. *Electrochimica Acta, 247*,
+  1117–1129.
+  [https://doi.org/10.1016/j.electacta.2017.07.050](https://doi.org/10.1016/j.electacta.2017.07.050)
+- **hybrid-drt DRT analysis and fit-parameter explorers** — probabilistic DRT
+  with a dual regression-classification framework:
+  Huang, J., Sullivan, N. P., Zakutayev, A., & O’Hayre, R. (2023). How
+  reliable is distribution of relaxation times (DRT) analysis? A dual
+  regression-classification perspective on DRT estimation, interpretation,
+  and accuracy. *Electrochimica Acta, 443*, 141879.
+  [https://doi.org/10.1016/j.electacta.2023.141879](https://doi.org/10.1016/j.electacta.2023.141879)
+  (open version:
+  [https://www.osti.gov/servlets/purl/1957991](https://www.osti.gov/servlets/purl/1957991))
+- **scikit-learn** (used for the ML topology and parameter-prediction
+  pipelines):
+  Pedregosa, F., et al. (2011). Scikit-learn: Machine Learning in Python.
+  *Journal of Machine Learning Research, 12*, 2825–2830.
+  [https://doi.org/10.48550/arXiv.1201.0490](https://doi.org/10.48550/arXiv.1201.0490)
+
 ## License
 
 eisyFIT is licensed under the GNU General Public License v3.0 or later.

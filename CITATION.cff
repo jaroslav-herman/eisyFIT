@@ -1,0 +1,83 @@
+cff-version: 1.2.0
+message: "If you use eisyFIT in published work, please cite the software and the papers behind the analysis methods you used."
+title: eisyFIT
+version: 0.1.9
+date-released: "2026-10-09"
+authors:
+  - given-names: Jaroslav
+    family-names: Herman
+repository-code: "https://github.com/jaroslav-herman/eisyFIT"
+url: "https://github.com/jaroslav-herman/eisyFIT"
+abstract: "Interactive desktop application for exploring, cleaning, and fitting BioLogic electrochemical impedance spectra, with DRT-assisted outlier detection, equivalent-circuit fitting, and ML-assisted parameter prediction."
+keywords:
+  - electrochemistry
+  - impedance spectroscopy
+  - EIS
+  - BioLogic
+  - equivalent circuit
+  - distribution of relaxation times
+license: GPL-3.0-or-later
+type: software
+preferred-citation:
+  type: article
+  title: "impedance.py: A Python package for electrochemical impedance analysis"
+  authors:
+    - given-names: Matthew D.
+      family-names: Murbach
+    - given-names: Brian S.
+      family-names: Gerwe
+    - given-names: Neal
+      family-names: Dawson-Elli
+    - given-names: Daniel T.
+      family-names: Schwartz
+  journal: "Journal of Open Source Software"
+  volume: 5
+  issue: 52
+  page: 2349
+  year: 2020
+  doi: "10.21105/joss.02349"
+references:
+  - type: article
+    title: "Towards robust autonomous impedance spectroscopy analysis: A calibrated hierarchical Bayesian approach for electrochemical impedance spectroscopy (EIS) inversion"
+    authors:
+      - given-names: Jake
+        family-names: Huang
+      - given-names: Meagan
+        family-names: Papac
+      - given-names: Ryan
+        family-names: "O'Hayre"
+    journal: "Electrochimica Acta"
+    volume: 367
+    page: 137493
+    year: 2021
+    doi: "10.1016/j.electacta.2020.137493"
+  - type: article
+    title: "How reliable is distribution of relaxation times (DRT) analysis? A dual regression-classification perspective on DRT estimation, interpretation, and accuracy"
+    authors:
+      - given-names: Jake
+        family-names: Huang
+      - given-names: Neal P.
+        family-names: Sullivan
+      - given-names: Andriy
+        family-names: Zakutayev
+      - given-names: Ryan
+        family-names: "O'Hayre"
+    journal: "Electrochimica Acta"
+    volume: 443
+    page: 141879
+    year: 2023
+    doi: "10.1016/j.electacta.2023.141879"
+  - type: article
+    title: "A Method for Improving the Robustness of Linear Kramers-Kronig Validity Tests"
+    authors:
+      - given-names: Michael
+        family-names: "Schönleber"
+      - given-names: Dino
+        family-names: Klotz
+      - given-names: Ellen
+        family-names: "Ivers-Tiffée"
+    journal: "Electrochimica Acta"
+    volume: 131
+    pages: 20-27
+    year: 2014
+    doi: "10.1016/j.electacta.2014.01.034"
