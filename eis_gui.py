@@ -301,7 +301,8 @@ class _ExplorerCurveFitTool:
 
         self.equation_var.trace_add("write", lambda *_args: self._on_equation_changed())
         self.canvas.mpl_connect("button_press_event", self._on_press)
-        self._on_equation_changed()
+        self._last_equation = self.equation_var.get().strip()
+        self._update_status()
 
     def _parse_names(self) -> list[str]:
         try:
