@@ -660,7 +660,8 @@ class SpectrumFitTarget:
 @dataclass
 class SpectrumBatchFit:
     loaded: LoadedProject
-    fit: BatchCycleFit
+    fit: BatchCycleFit | None = None
+    error: str | None = None
 
 
 @dataclass
@@ -2649,12 +2650,21 @@ def batch_fit_spectra(
             )
             fitted, errors_percent, fit_frequency, fit_impedance, fit_at_data = fit_result
         except Exception as error:
-            return SpectrumBatchReport(
-                completed,
-                target.label,
-                f"{type(error).__name__}: {error}",
-                skipped_labels=[item.label for item in targets[index + 1 :]],
+            # Continue with next spectrum instead of stopping
+            completed.append(
+                SpectrumBatchFit(
+                    loaded=target.loaded,
+                    fit=None,
+                    error=f"{type(error).__name__}: {error}",
+                )
             )
+            if stop_event is not None and stop_event.is_set():
+                return SpectrumBatchReport(
+                    completed,
+                    stopped=True,
+                    skipped_labels=[item.label for item in targets[index + 1 :]],
+                )
+            continue
         fitted_parameters = [
             ParameterValue(
                 parameter.name,
@@ -2749,7 +2759,17 @@ def batch_fit_candidate_spectra(
             except Exception as error:
                 failures.append(f"{circuit}: {type(error).__name__}: {error}")
         if not results:
-            return SpectrumBatchReport(completed, target.label, "; ".join(failures), skipped_labels=[item.label for item in targets[index + 1:]])
+            # Continue with next spectrum instead of stopping
+            completed.append(
+                SpectrumBatchFit(
+                    loaded=target.loaded,
+                    fit=None,
+                    error="; ".join(failures),
+                )
+            )
+            if stop_event is not None and stop_event.is_set():
+                return SpectrumBatchReport(completed, stopped=True, skipped_labels=[item.label for item in targets[index + 1:]])
+            continue
         results.sort(key=lambda item: (item[0], item[1]))
         best_score, _complexity, best_circuit, best_parameters, fit_result = results[0]
         fitted_parameters = [

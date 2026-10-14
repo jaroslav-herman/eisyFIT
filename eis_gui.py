@@ -13268,15 +13268,19 @@ class EISApplication:
     def _finish_explorer_batch_fit(self, report: SpectrumBatchReport) -> None:
         if self.state is None:
             return
+        failed_count = 0
         for result in report.fits:
-            cycle = result.fit.cycle
-            cycle.parameters = result.fit.parameters
-            cycle.fit_parameters = result.fit.fitted_parameters
-            cycle.fit_frequency_hz = result.fit.fit_frequency_hz
-            cycle.fit_impedance = result.fit.fit_impedance
-            cycle.fit_at_data_impedance = result.fit.fit_at_data_impedance
-            cycle.fit_provenance = dict(result.fit.fit_provenance)
-            result.loaded.state.cycles[cycle.cycle] = cycle
+            if result.fit is not None:
+                cycle = result.fit.cycle
+                cycle.parameters = result.fit.parameters
+                cycle.fit_parameters = result.fit.fitted_parameters
+                cycle.fit_frequency_hz = result.fit.fit_frequency_hz
+                cycle.fit_impedance = result.fit.fit_impedance
+                cycle.fit_at_data_impedance = result.fit.fit_at_data_impedance
+                cycle.fit_provenance = dict(result.fit.fit_provenance)
+                result.loaded.state.cycles[cycle.cycle] = cycle
+            else:
+                failed_count += 1
         self._restore_controls()
         self._refresh_plot(rescale=True)
         self._refresh_open_parameter_explorers()
@@ -13289,24 +13293,22 @@ class EISApplication:
                     f"skipped {len(report.skipped_labels)} spectra"
                 )
                 return
-            if report.failed_label is not None:
+            # Collect failures from results with errors
+            failures = []
+            for result in report.fits:
+                if result.error is not None:
+                    failures.append((result.loaded.dataset_label, result.error))
+            if failures:
                 actions, index, threshold, refine_z, refine_iterations, selected_rows = ml_pending
                 successful_keys = {
                     (id(result.loaded), int(result.fit.cycle.cycle))
-                    for result in report.fits
+                    for result in report.fits if result.fit is not None
                 }
                 selected_rows = [
                     row for row in selected_rows
                     if (id(row[1]), int(row[2].cycle)) in successful_keys
                 ]
                 self._ml_pipeline_successful_fit_count = len(selected_rows)
-                failures = [
-                    (report.failed_label, report.error or "fit failed"),
-                    *[
-                        (label, "skipped because a previous spectrum failed to fit")
-                        for label in report.skipped_labels
-                    ],
-                ]
                 self._ml_pipeline_failures.extend(failures)
                 self._ml_pipeline_pending = (
                     actions,
@@ -13343,24 +13345,28 @@ class EISApplication:
                 f"skipped {len(report.skipped_labels)} spectra"
             )
             return
-        if report.failed_label is None:
+        # Count failures
+        failed_count = sum(1 for result in report.fits if result.error is not None)
+        if failed_count == 0:
             self._update_status(
                 f"explorer batch fit completed for {len(report.fits)} spectra"
             )
             return
         self._update_status(
-            f"explorer batch stopped at {report.failed_label}; "
-            f"{len(report.fits)} completed, {len(report.skipped_labels)} skipped"
+            f"explorer batch fit completed: {len(report.fits) - failed_count} succeeded, "
+            f"{failed_count} failed, {len(report.skipped_labels)} skipped"
         )
-        messagebox.showwarning(
-            "Explorer batch fit stopped",
-            f"{report.failed_label}: {report.error}\n\n"
-            f"Completed: {len(report.fits)}\n"
-            f"Failed: 1\n"
-            f"Skipped: {len(report.skipped_labels)}\n\n"
-            f"The successful fits were retained.",
-            parent=self.root,
-        )
+        if failed_count > 0:
+            failed_labels = [result.loaded.dataset_label for result in report.fits if result.error is not None]
+            messagebox.showwarning(
+                "Explorer batch fit had failures",
+                f"Completed: {len(report.fits) - failed_count}\n"
+                f"Failed: {failed_count}\n"
+                f"Skipped: {len(report.skipped_labels)}\n\n"
+                f"Failed spectra: {', '.join(failed_labels)}\n\n"
+                f"The successful fits were retained.",
+                parent=self.root,
+            )
 
     def batch_fit_selected_up_down(self) -> None:
         if self.busy or self.state is None:
