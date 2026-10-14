@@ -8321,7 +8321,7 @@ class EISApplication:
                     cycle.outliers = ~cycle.manually_included
                 cycle.invalidate_drt_cache()
                 cycle.clear_fit()
-            if "model" in operations or "parameter_limits" in operations or "initial_parameters" in operations:
+            if "model" in operations:
                 circuit = suggested_eec(result)
                 if not circuit:
                     missing.append(f"{label} (EEC model unavailable)")
@@ -8331,30 +8331,31 @@ class EISApplication:
                 except Exception:
                     missing.append(f"{label} (invalid EEC model)")
                     continue
-                if "model" in operations:
-                    self._configure_cycle_model(cycle, circuit, parameters, loaded.state.circuit)
-                if "parameter_limits" in operations or "initial_parameters" in operations:
-                    by_name = {parameter.name: parameter for parameter in cycle.parameters}
-                    current_model = cycle.model(loaded.state.circuit)
-                    mapping = parameter_name_mapping(circuit, current_model) if circuits_equivalent(circuit, current_model) else {}
-                    parameter_names = set(result.model_parameters)
-                    if "parameter_limits" in operations:
-                        parameter_names.update(result.parameter_limits)
-                    for name in parameter_names:
-                        value = result.model_parameters.get(name)
-                        target_name = map_parameter_name(name, mapping) or name
-                        parameter = by_name.get(target_name)
-                        if parameter is not None:
-                            if "parameter_limits" in operations:
-                                limits = result.parameter_limits.get(name)
-                            else:
-                                limits = None
-                            if limits is not None:
-                                parameter.lower, parameter.upper = limits
-                            if "initial_parameters" in operations and name in result.model_parameters:
-                                parameter.initial = self._clamp_parameter_value(value, parameter.lower, parameter.upper)
-                    cycle.clear_fit()
+                self._configure_cycle_model(cycle, circuit, parameters, loaded.state.circuit)
                 candidate_circuits[label] = list(dict.fromkeys(result.topology_candidates or [circuit]))
+            if "parameter_limits" in operations or "initial_parameters" in operations:
+                current_model = cycle.model(loaded.state.circuit)
+                by_name = {parameter.name: parameter for parameter in cycle.parameters}
+                ml_circuit = suggested_eec(result) or result.model_circuit or current_model
+                element_mapping = parameter_name_mapping(ml_circuit, current_model) if ml_circuit != current_model else None
+                mapping = element_mapping if element_mapping is not None else {}
+                parameter_names = set(result.model_parameters)
+                if "parameter_limits" in operations:
+                    parameter_names.update(result.parameter_limits)
+                for name in parameter_names:
+                    value = result.model_parameters.get(name)
+                    target_name = map_parameter_name(name, mapping) or name
+                    parameter = by_name.get(target_name)
+                    if parameter is not None:
+                        if "parameter_limits" in operations:
+                            limits = result.parameter_limits.get(name)
+                        else:
+                            limits = None
+                        if limits is not None:
+                            parameter.lower, parameter.upper = limits
+                        if "initial_parameters" in operations and name in result.model_parameters:
+                            parameter.initial = self._clamp_parameter_value(value, parameter.lower, parameter.upper)
+                cycle.clear_fit()
             assignments.append((dataset_id, loaded, spectrum, cycle))
 
         if assignments and assignments[0][1] is self.loaded and assignments[0][3].cycle == self.state.active_cycle:
@@ -8624,26 +8625,13 @@ class EISApplication:
                 missing_results.append(f"{dataset_id}:{spectrum.cycle}")
                 continue
             cycle = self._loaded_cycle_for_popup(loaded, spectrum.cycle)
-            circuit = suggested_eec(result) or result.model_circuit
-            if not circuit:
-                missing_results.append(f"{dataset_id}:{spectrum.cycle}")
-                continue
             current_model = cycle.model(loaded.state.circuit)
-            equivalent = circuits_equivalent(current_model, circuit)
-            if equivalent:
-                parameters = cycle.parameters
-            elif cycle.fit_parameters is not None:
-                missing_results.append(f"{dataset_id}:{spectrum.cycle} (model already fitted)")
-                continue
-            else:
-                parameters = circuit_parameters(circuit, self._eec_parameter_bounds)
-                cycle.circuit = circuit
-            by_name = {parameter.name: parameter for parameter in parameters}
+            by_name = {parameter.name: parameter for parameter in cycle.parameters}
+            ml_circuit = suggested_eec(result) or result.model_circuit or current_model
+            element_mapping = parameter_name_mapping(ml_circuit, current_model) if ml_circuit != current_model else None
+            mapping = element_mapping if element_mapping is not None else {}
             for name, value in result.model_parameters.items():
-                target_name = name
-                if equivalent:
-                    mapping = parameter_name_mapping(circuit, current_model)
-                    target_name = map_parameter_name(name, mapping or {}) or name
+                target_name = map_parameter_name(name, mapping) or name
                 parameter = by_name.get(target_name)
                 if parameter is not None:
                     limits = result.parameter_limits.get(name) if apply_limits else None
@@ -8655,11 +8643,10 @@ class EISApplication:
             missing = [name for name in by_name if name not in result.model_parameters]
             if missing:
                 missing_parameters.extend(f"{spectrum.cycle}: {name}" for name in missing)
-            cycle.parameters = parameters
             updated += 1
             if loaded is self.loaded and cycle.cycle == self.state.active_cycle:
                 self.model_var.set(cycle.model(self.state.circuit))
-                self.parameter_table.set_parameters(parameters)
+                self.parameter_table.set_parameters(cycle.parameters)
         self._refresh_explorer_values()
         self._refresh_plot(rescale=True)
         message = f"ML initial parameters loaded for {updated} selected spectra; no fit was started"
