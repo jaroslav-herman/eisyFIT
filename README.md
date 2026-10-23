@@ -94,6 +94,21 @@ available and starts the application from the repository directory.
 If `uv` is not available, install it using the official instructions linked
 above, then open a new terminal and repeat `uv sync`.
 
+## In-app help and documentation
+
+The menu bar has a **Help** menu next to File, Fit, Procedures, Export, and the other menus. It opens the bundled Markdown documentation in an in-app viewer:
+
+- **Getting started** — shortest path from importing a `.mpt` file to a fitted, saved spectrum
+- **eisyFIT overview** — window layout, analysis modes, and core concepts
+- **Button and menu reference** — what each visible button, menu item, and keyboard shortcut does
+- **Procedures and batch fitting** — batch fitting and the procedure builder
+- **DRT and outliers** — Ridge/Hybrid DRT, outlier detection, and point cleaning
+- **Explorers and export** — spectra explorer, parameter explorers, curve fitting, and exports
+- **ML processing** — machine-learning suggestions and safety rules
+- **Preferences** — optimizer, explorer, threshold, and parameter-limit settings
+
+**Help → Open documentation file…** (`F1`) opens any `.md` or text documentation file. **Help → About eisyFIT** shows the application version and documentation folder. The same Markdown files live in [`docs/`](docs) for reading on GitHub or editing in a text editor.
+
 ## References and scientific works
 
 eisyFIT builds on published methods from the electrochemical impedance

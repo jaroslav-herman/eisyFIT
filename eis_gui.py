@@ -13,6 +13,7 @@ import re
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import threading
 import tkinter as tk
@@ -229,6 +230,48 @@ ML_TRAINED_MODELS = {
     "AEM-WE": Path(__file__).resolve().parent / "ml" / "analysis" / "number_aware_pipeline_aem_we" / "pipeline.joblib",
     "Flex": Path(__file__).resolve().parent / "ml" / "analysis" / "number_aware_pipeline_flex_181" / "pipeline.joblib",
 }
+
+HELP_TOPICS: tuple[tuple[str, str, str], ...] = (
+    ("Getting started", "quick-start.md", "Quick start"),
+    ("eisyFIT overview", "overview.md", "eisyFIT overview"),
+    ("Button and menu reference", "button-reference.md", "Button and menu reference"),
+    ("Procedures and batch fitting", "procedures-and-batch.md", "Procedures and batch fitting"),
+    ("DRT and outliers", "drt-and-outliers.md", "DRT and outliers"),
+    ("Explorers and export", "explorers-and-export.md", "Explorers and export"),
+    ("ML processing", "ml-processing.md", "ML processing"),
+    ("Preferences", "preferences.md", "Preferences"),
+)
+
+
+def _help_docs_directory() -> Path:
+    """Return the bundled Markdown documentation directory."""
+    candidates = (
+        Path(__file__).resolve().parent / "docs",
+        Path(sys.argv[0]).resolve().parent / "docs" if sys.argv[0] else None,
+        Path.cwd() / "docs",
+    )
+    for candidate in candidates:
+        if candidate is not None and (candidate / "quick-start.md").is_file():
+            return candidate
+    return candidates[0]
+
+
+def _help_document_path(filename: str) -> Path:
+    return _help_docs_directory() / filename
+
+
+def _help_topic_label(filename: str) -> str:
+    for _menu_label, topic_filename, topic_title in HELP_TOPICS:
+        if topic_filename == filename:
+            return topic_title
+    return Path(filename).stem.replace("-", " ").replace("_", " ").title()
+
+
+APP_VERSION = "0.1.9"
+
+_HELP_INLINE_PATTERN = re.compile(r"(\*\*.+?\*\*|`[^`]+`)")
+_HELP_TABLE_SEPARATOR_PATTERN = re.compile(r"\|[\s\-|:\+]+\|")
+_HELP_NUMBERED_LINE_PATTERN = re.compile(r"^\d+\.\s")
 
 
 def _configure_matplotlib_without_tex() -> None:
@@ -1455,6 +1498,7 @@ class EISApplication:
         self.root.bind("<Alt-R>", self._calculate_current_drt_key)
         self.root.bind("<Alt-s>", self._on_analysis_alt_s)
         self.root.bind("<Alt-S>", self._on_analysis_alt_s)
+        self.root.bind("<F1>", lambda _event: self.open_help_file_dialog())
         if self.path is not None:
             self.root.after(30, self._begin_loading)
         else:
@@ -1626,6 +1670,24 @@ class EISApplication:
             command=self.export_selected_drts,
         )
         menu_bar.add_cascade(label="Export", menu=self.export_menu)
+        self.help_menu = tk.Menu(menu_bar, tearoff=False)
+        for menu_label, filename, _title in HELP_TOPICS:
+            self.help_menu.add_command(
+                label=menu_label,
+                command=lambda topic=filename: self.open_help_topic(topic),
+            )
+        self.help_menu.add_separator()
+        self.help_menu.add_command(
+            label="Open documentation file\u2026",
+            accelerator="F1",
+            command=self.open_help_file_dialog,
+        )
+        self.help_menu.add_separator()
+        self.help_menu.add_command(
+            label="About eisyFIT",
+            command=self.show_about,
+        )
+        menu_bar.add_cascade(label="Help", menu=self.help_menu)
         self.root.configure(menu=menu_bar)
         self._fit_menu_actions = (
             "Fit selected spectrum",
@@ -1646,6 +1708,228 @@ class EISApplication:
             "Export to Python - selected spectra…",
             "Export DRTs - all spectra…",
             "Export DRTs - selected spectra…",
+        )
+
+    def open_help_topic(self, filename: str) -> None:
+        path = _help_document_path(filename)
+        if not path.is_file():
+            messagebox.showerror(
+                "Documentation missing",
+                f"Documentation file not found:\n{path}",
+                parent=self.root,
+            )
+            return
+        self.open_help_document(path)
+
+    def open_help_file_dialog(self) -> None:
+        docs_directory = _help_docs_directory()
+        selected = filedialog.askopenfilename(
+            title="Open documentation file",
+            initialdir=str(docs_directory if docs_directory.is_dir() else Path.cwd()),
+            filetypes=(
+                ("Markdown files", "*.md"),
+                ("Text files", "*.txt"),
+                ("All files", "*.*"),
+            ),
+            parent=self.root,
+        )
+        if not selected:
+            return
+        self.open_help_document(Path(selected))
+
+    def open_help_document(self, path: Path) -> None:
+        try:
+            markdown = path.read_text(encoding="utf-8")
+        except OSError as error:
+            messagebox.showerror(
+                "Documentation",
+                f"Could not read {path.name}:\n{error}",
+                parent=self.root,
+            )
+            return
+        existing = getattr(self, "help_popup", None)
+        if existing is not None and existing.winfo_exists():
+            self._set_help_document(path, markdown)
+            existing.lift()
+            existing.focus_force()
+            return
+
+        popup = tk.Toplevel(self.root)
+        self.help_popup = popup
+        popup.geometry("880x700")
+        popup.minsize(560, 420)
+        popup.transient(self.root)
+        popup.columnconfigure(0, weight=1)
+        popup.rowconfigure(1, weight=1)
+
+        header = ttk.Frame(popup, padding=(10, 10, 10, 6))
+        header.grid(row=0, column=0, sticky="ew")
+        header.columnconfigure(1, weight=1)
+        self.help_title_var = tk.StringVar(value="")
+        ttk.Label(
+            header, textvariable=self.help_title_var, font=("Segoe UI", 11, "bold")
+        ).grid(row=0, column=0, sticky="w")
+        self.help_topic_var = tk.StringVar(value="")
+        topic_box = ttk.Combobox(
+            header,
+            textvariable=self.help_topic_var,
+            values=[label for label, _filename, _title in HELP_TOPICS],
+            state="readonly",
+            width=28,
+        )
+        topic_box.grid(row=0, column=1, sticky="e", padx=(12, 0))
+        topic_box.bind(
+            "<<ComboboxSelected>>",
+            lambda _event: self._open_help_topic_from_selector(),
+        )
+        ttk.Button(
+            header, text="Open file…", command=self.open_help_file_dialog
+        ).grid(row=0, column=2, padx=(8, 0))
+        ttk.Button(header, text="Close", command=popup.destroy).grid(
+            row=0, column=3, padx=(8, 0)
+        )
+
+        body = ttk.Frame(popup, padding=(10, 0, 10, 10))
+        body.grid(row=1, column=0, sticky="nsew")
+        body.columnconfigure(0, weight=1)
+        body.rowconfigure(0, weight=1)
+        text = tk.Text(
+            body,
+            wrap="word",
+            padx=8,
+            pady=8,
+            font=("Segoe UI", 10),
+            relief="flat",
+            background="#ffffff",
+        )
+        text.grid(row=0, column=0, sticky="nsew")
+        scrollbar = ttk.Scrollbar(body, orient="vertical", command=text.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        text.configure(yscrollcommand=scrollbar.set)
+        text.tag_configure("heading0", font=("Segoe UI", 14, "bold"), spacing3=6)
+        text.tag_configure(
+            "heading1", font=("Segoe UI", 12, "bold"), spacing1=8, spacing3=4
+        )
+        text.tag_configure(
+            "heading2", font=("Segoe UI", 11, "bold"), spacing1=6, spacing3=3
+        )
+        text.tag_configure("heading3", font=("Segoe UI", 10, "bold"), spacing1=4, spacing3=2)
+        text.tag_configure("code", font=("Consolas", 9), background="#f4f4f4")
+        text.tag_configure("bold", font=("Segoe UI", 10, "bold"))
+        text.tag_configure("bullet", lmargin1=14, lmargin2=14)
+        self.help_text = text
+        popup.protocol("WM_DELETE_WINDOW", popup.destroy)
+        popup.bind("<Escape>", lambda _event: popup.destroy())
+        self._set_help_document(path, markdown)
+        text.focus_set()
+
+    def _open_help_topic_from_selector(self) -> None:
+        label = self.help_topic_var.get()
+        filename = next(
+            (
+                topic_filename
+                for menu_label, topic_filename, _title in HELP_TOPICS
+                if menu_label == label
+            ),
+            None,
+        )
+        if filename is not None:
+            self.open_help_topic(filename)
+
+    def _set_help_document(self, path: Path, markdown: str | None = None) -> None:
+        if markdown is None:
+            try:
+                markdown = path.read_text(encoding="utf-8")
+            except OSError as error:
+                messagebox.showerror(
+                    "Documentation",
+                    f"Could not read {path.name}:\n{error}",
+                    parent=self.root,
+                )
+                return
+        title = _help_topic_label(path.name)
+        menu_label = next(
+            (
+                label
+                for label, filename, _topic_title in HELP_TOPICS
+                if filename == path.name
+            ),
+            "",
+        )
+        self.help_popup.title(f"Help — {title}")
+        self.help_title_var.set(title)
+        self.help_topic_var.set(menu_label)
+        text = self.help_text
+        text.configure(state="normal")
+        text.delete("1.0", "end")
+        self._render_help_markdown(text, markdown)
+        text.configure(state="disabled")
+        text.yview_moveto(0)
+
+    @staticmethod
+    def _insert_help_inline(
+        widget: tk.Text, text: str, tags: tuple[str, ...] = ()
+    ) -> None:
+        for part in _HELP_INLINE_PATTERN.split(text):
+            if not part:
+                continue
+            if len(part) > 4 and part.startswith("**") and part.endswith("**"):
+                widget.insert("end", part[2:-2], tuple(tags) + ("bold",))
+            elif len(part) > 2 and part.startswith("`") and part.endswith("`"):
+                widget.insert("end", part[1:-1], tuple(tags) + ("code",))
+            else:
+                widget.insert("end", part, tuple(tags))
+
+    @classmethod
+    def _render_help_markdown(cls, widget: tk.Text, markdown: str) -> None:
+        in_code_block = False
+        for raw_line in markdown.splitlines():
+            line = raw_line.rstrip()
+            stripped = line.strip()
+            if stripped.startswith("```"):
+                in_code_block = not in_code_block
+                continue
+            if in_code_block:
+                widget.insert("end", line + "\n", ("code",))
+            elif not stripped:
+                widget.insert("end", "\n")
+            elif stripped.startswith("#### "):
+                cls._insert_help_inline(widget, stripped[5:].strip(), ("heading3",))
+                widget.insert("end", "\n\n")
+            elif stripped.startswith("### "):
+                cls._insert_help_inline(widget, stripped[4:].strip(), ("heading2",))
+                widget.insert("end", "\n\n")
+            elif stripped.startswith("## "):
+                cls._insert_help_inline(widget, stripped[3:].strip(), ("heading1",))
+                widget.insert("end", "\n\n")
+            elif stripped.startswith("# "):
+                cls._insert_help_inline(widget, stripped[2:].strip(), ("heading0",))
+                widget.insert("end", "\n\n")
+            elif stripped.startswith("- ") or stripped.startswith("* "):
+                widget.insert("end", "• ", ("bullet",))
+                cls._insert_help_inline(widget, stripped[2:].strip(), ("bullet",))
+                widget.insert("end", "\n")
+            elif stripped.startswith("|"):
+                if _HELP_TABLE_SEPARATOR_PATTERN.fullmatch(stripped):
+                    continue
+                widget.insert("end", line + "\n", ("code",))
+            elif stripped in {"---", "***", "___"}:
+                continue
+            elif _HELP_NUMBERED_LINE_PATTERN.match(stripped):
+                widget.insert("end", "    " + stripped + "\n")
+            else:
+                cls._insert_help_inline(widget, stripped)
+                widget.insert("end", "\n")
+
+    def show_about(self) -> None:
+        messagebox.showinfo(
+            "About eisyFIT",
+            f"eisyFIT {APP_VERSION}\n\n"
+            "Interactive desktop application for exploring, cleaning, and fitting "
+            "BioLogic electrochemical impedance spectra.\n\n"
+            f"Documentation folder: {_help_docs_directory()}\n"
+            "Project: https://github.com/jaroslav-herman/eisyFIT",
+            parent=self.root,
         )
 
     @staticmethod
