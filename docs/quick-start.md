@@ -16,7 +16,8 @@ To open a BioLogic file immediately and select a cycle:
 uv run python main.py path/to/spectrum.mpt --cycle 1
 ```
 
-On Windows, `run_gui.cmd` can also be double-clicked.
+On Windows, `eisyFIT` can also be double-clicked (the `eisyFIT.lnk` shortcut
+with the eisyFIT icon, or `eisyFIT.cmd`).
 
 ## 2. Import data
 

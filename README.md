@@ -93,8 +93,10 @@ To open a BioLogic file immediately and select a cycle, pass its path:
 uv run python main.py path/to/spectrum.mpt --cycle 1
 ```
 
-On Windows, `run_gui.cmd` can also be double-clicked. It checks that `uv` is
-available and starts the application from the repository directory.
+On Windows, `eisyFIT` can also be double-clicked: use the `eisyFIT.lnk`
+shortcut (shown with the eisyFIT icon, `icon.ico`) or `eisyFIT.cmd`. It checks
+that `uv` is available and starts the application from the repository
+directory.
 
 If `uv` is not available, install it using the official instructions linked
 above, then open a new terminal and repeat `uv sync`.

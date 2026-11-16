@@ -14,7 +14,7 @@ uv run python main.py
 
 if errorlevel 1 (
     echo.
-    echo EIS Fitting failed to start. The error is shown above.
+    echo eisyFIT failed to start. The error is shown above.
     pause
 )
 endlocal
