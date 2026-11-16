@@ -70,6 +70,11 @@ cd eisyFIT
 uv sync
 ```
 
+The AEM training spectra under `training_data/AEM/` are deliberately not
+tracked in git (see `.gitignore`), so cloning and pulling stay small. They are
+only needed to retrain the AEM-WE model (`ml/train_aem_we_model.py`), not to
+run the application.
+
 `uv sync` creates the project environment and installs the versions recorded
 in `uv.lock`, including the required EIS and DRT libraries. Re-run it after
 pulling changes to update the environment.

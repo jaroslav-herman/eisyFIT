@@ -101,3 +101,12 @@ ml_cache_validation*/
 # Build artifacts
 # ==========================
 *.egg-info/
+
+# ==========================
+# AEM training spectra
+# ==========================
+
+# Large manually fitted PEIS samples used only to retrain the AEM-WE model
+# (ml/train_aem_we_model.py). Not needed to run the application; kept out of
+# the repository so clones and pulls stay small.
+training_data/AEM/
