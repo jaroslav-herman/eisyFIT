@@ -19,7 +19,7 @@ The application:
 - Provides DRT and EEC fit-parameter explorers with an interactive curve fit tool
 - Exports fitted parameters and spectrum metadata to CSV and a ready-to-run Python script
 
-## What's new in 0.1.10
+## What's new in 0.1.11
 
 - On Windows, double-click `eisyFIT` after cloning: the `eisyFIT.lnk` shortcut
   (shown with the eisyFIT icon) or `eisyFIT.cmd` starts the application; the
