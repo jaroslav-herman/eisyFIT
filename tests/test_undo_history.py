@@ -184,7 +184,8 @@ class HistoryPersistenceTests(unittest.TestCase):
             restored_history = load_project_history(payload["history"], path)
             self.assertTrue(restored_history.can_undo)
             self.assertFalse(restored_history.can_redo)
-            restored_entry = restored_history.undo_stack[0]
+            self.assertEqual(restored_history.undo_label, "cycle 1: points")
+            restored_entry = restored_history.pop_undo()
             self.assertEqual(restored_entry.label, "cycle 1: points")
             self.assertEqual(restored_entry.current_dataset_id, loaded.dataset_id)
             self.assertEqual(
@@ -223,6 +224,44 @@ class HistoryPersistenceTests(unittest.TestCase):
             restored = load_project_history(payload, path)
         self.assertEqual(restored.undo_label, "fit")
         self.assertEqual(restored.limit, history.limit)
+
+    def test_loaded_history_is_lazy_until_popped(self):
+        loaded, state, dataframe = _loaded_project()
+        entry = HistoryEntry(
+            label="cycle 1: points",
+            current_dataset_id=loaded.dataset_id,
+            datasets=[(loaded.dataset_id, copy_loaded_project(loaded))],
+        )
+        history = UndoHistory()
+        history.push(entry)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "project.eisfit.json"
+            save_project_file(
+                state,
+                path,
+                datasets=[(loaded.dataset_id, state, dataframe)],
+                history=history,
+            )
+            payload = load_json_payload(path)
+            restored_history = load_project_history(payload["history"], path)
+            lazy_entry = restored_history.undo_stack[0]
+            self.assertEqual(lazy_entry.label, "cycle 1: points")
+            self.assertIsNotNone(lazy_entry.payload)
+            self.assertEqual(lazy_entry.datasets, [])
+            # lazy entries serialize back without materializing
+            self.assertEqual(
+                history_to_payload(restored_history)["undo"][0]["label"],
+                "cycle 1: points",
+            )
+            materialized = restored_history.pop_undo()
+            self.assertEqual(
+                [dataset_id for dataset_id, _ in materialized.datasets],
+                [loaded.dataset_id],
+            )
+            np.testing.assert_array_equal(
+                materialized.datasets[0][1].state.active.manually_included,
+                entry.datasets[0][1].state.active.manually_included,
+            )
 
     def test_missing_history_defaults_to_empty(self):
         with tempfile.TemporaryDirectory() as directory:

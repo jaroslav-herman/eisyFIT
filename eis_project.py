@@ -328,6 +328,10 @@ def dataframe_from_payload(payload: str):
 
 
 def _history_entry_to_payload(entry) -> dict[str, object]:
+    if entry.payload is not None:
+        payload = dict(entry.payload)
+        payload["label"] = entry.label
+        return payload
     return {
         "label": entry.label,
         "current_dataset_id": entry.current_dataset_id,
@@ -405,7 +409,7 @@ def _history_entry_from_payload(data: dict[str, object], path: Path):
 
 
 def load_project_history(history_payload, path: Path):
-    from eis_services import UndoHistory
+    from eis_services import HistoryEntry, UndoHistory
 
     history = UndoHistory()
     if not isinstance(history_payload, dict):
@@ -413,13 +417,25 @@ def load_project_history(history_payload, path: Path):
     limit = history_payload.get("limit")
     if isinstance(limit, int) and limit > 0:
         history.limit = limit
+    # Keep the raw payloads and materialize an entry only when it is popped
+    # for an undo/redo, so loading a project does not pay for the whole stack.
+    history.materializer = lambda payload: _history_entry_from_payload(payload, path)
     for key, stack in (("undo", history.undo_stack), ("redo", history.redo_stack)):
         entries = history_payload.get(key)
         if not isinstance(entries, list):
             continue
         for entry_payload in entries:
             if isinstance(entry_payload, dict):
-                stack.append(_history_entry_from_payload(entry_payload, path))
+                current_dataset_id = entry_payload.get("current_dataset_id")
+                stack.append(
+                    HistoryEntry(
+                        label=str(entry_payload.get("label") or "change"),
+                        current_dataset_id=(
+                            str(current_dataset_id) if current_dataset_id else None
+                        ),
+                        payload=dict(entry_payload),
+                    )
+                )
     return history
 
 
