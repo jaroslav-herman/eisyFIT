@@ -83,5 +83,5 @@ jobs:
           python -m venv /tmp/eisyfit-clean
           /tmp/eisyfit-clean/bin/python -m pip install --upgrade pip
           /tmp/eisyfit-clean/bin/python -m pip install dist/eisyfit-*.whl
-          /tmp/eisyfit-clean/bin/python -c "import importlib.metadata, main; assert importlib.metadata.version('eisyfit') == '0.1.9'; print('eisyfit clean install succeeded')"
+          /tmp/eisyfit-clean/bin/python -c "import importlib.metadata, main, tomllib; expected = tomllib.load(open('pyproject.toml', 'rb'))['project']['version']; actual = importlib.metadata.version('eisyfit'); assert actual == expected, (actual, expected); print('eisyfit clean install succeeded')"
       - run: uv publish

@@ -19,6 +19,14 @@ The application:
 - Provides DRT and EEC fit-parameter explorers with an interactive curve fit tool
 - Exports fitted parameters and spectrum metadata to CSV and a ready-to-run Python script
 
+## What's new in 0.1.10
+
+- On Windows, double-click `eisyFIT` after cloning: the `eisyFIT.lnk` shortcut
+  (shown with the eisyFIT icon) or `eisyFIT.cmd` starts the application; the
+  stale machine-specific `launch_gui.bat` and `Launch_GUI.vbs` were removed
+- The AEM training spectra under `training_data/AEM/` are no longer tracked in
+  git, so cloning and pulling stay small
+
 ## What's new in 0.1.9
 
 - Interactive curve fit tool in the DRT and EEC fit-parameter explorers: type any
