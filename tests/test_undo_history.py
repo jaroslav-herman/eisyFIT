@@ -10,10 +10,8 @@ from eis_project import (
     _dataframe_to_payload,
     _state_to_payload,
     describe_history_change,
-    history_to_payload,
     load_json_payload,
     load_project_file,
-    load_project_history,
     save_project_file,
 )
 from eis_services import (
@@ -62,7 +60,7 @@ def _state() -> ProjectState:
     )
 
 
-def _loaded_project() -> tuple[object, ProjectState, pd.DataFrame]:
+def _loaded_project():
     dataframe = _dataframe()
     loaded = load_project_from_dataframe(
         dataframe, Path("source.mpt"), 1, "cell", "R0"
@@ -153,136 +151,47 @@ class CopyStateTests(unittest.TestCase):
         self.assertEqual(copied.dataframe.loc[0, "re_zwe_ce_ohm"], 2.0)
 
 
-class HistoryPersistenceTests(unittest.TestCase):
-    def test_history_round_trip_through_project_file(self):
+class ProjectFileHistoryTests(unittest.TestCase):
+    def test_saved_project_does_not_store_undo_history(self):
         loaded, state, dataframe = _loaded_project()
-        before = copy_loaded_project(loaded)
-        before.state.active.toggle_point(0)
         entry = HistoryEntry(
             label="cycle 1: points",
             current_dataset_id=loaded.dataset_id,
-            datasets=[(loaded.dataset_id, before)],
-            procedure_blocks={"block": [{"name": "Fit"}]},
-            procedures={},
+            datasets=[(loaded.dataset_id, copy_loaded_project(loaded))],
         )
         history = UndoHistory()
         history.push(entry)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "project.eisfit.json"
+            # The GUI never passes the history to save_project_file anymore;
+            # saving must not grow the file with undo snapshots.
             save_project_file(
                 state,
                 path,
                 datasets=[(loaded.dataset_id, state, dataframe)],
-                history=history,
             )
             payload = load_json_payload(path)
             self.assertEqual(payload["version"], 4)
-            self.assertIn("history", payload)
-            restored_main = load_project_file(state, dataframe, path, payload=payload)
-            self.assertIn(1, restored_main.cycles)
-
-            restored_history = load_project_history(payload["history"], path)
-            self.assertTrue(restored_history.can_undo)
-            self.assertFalse(restored_history.can_redo)
-            self.assertEqual(restored_history.undo_label, "cycle 1: points")
-            restored_entry = restored_history.pop_undo()
-            self.assertEqual(restored_entry.label, "cycle 1: points")
-            self.assertEqual(restored_entry.current_dataset_id, loaded.dataset_id)
-            self.assertEqual(
-                restored_entry.procedure_blocks, {"block": [{"name": "Fit"}]}
-            )
-            self.assertEqual(
-                [dataset_id for dataset_id, _ in restored_entry.datasets],
-                [loaded.dataset_id],
-            )
-            restored_loaded = restored_entry.datasets[0][1]
+            self.assertNotIn("history", payload)
+            restored = load_project_file(state, dataframe, path, payload=payload)
+            self.assertIn(1, restored.cycles)
             np.testing.assert_array_equal(
-                restored_loaded.state.active.manually_included,
-                before.state.active.manually_included,
-            )
-            self.assertEqual(
-                restored_loaded.state.active.parameters[0].initial,
-                before.state.active.parameters[0].initial,
-            )
-            pd.testing.assert_frame_equal(
-                restored_loaded.dataframe, before.dataframe, check_dtype=False
+                restored.cycles[1].manually_included,
+                state.cycles[1].manually_included,
             )
 
-    def test_history_payload_round_trip_without_file(self):
-        loaded, _state, _dataframe = _loaded_project()
-        entry = HistoryEntry(
-            label="fit",
-            current_dataset_id=loaded.dataset_id,
-            datasets=[(loaded.dataset_id, copy_loaded_project(loaded))],
-        )
-        history = UndoHistory()
-        history.push(entry)
-        payload = history_to_payload(history)
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "project.eisfit.json"
-            path.write_text("{}", encoding="utf-8")
-            restored = load_project_history(payload, path)
-        self.assertEqual(restored.undo_label, "fit")
-        self.assertEqual(restored.limit, history.limit)
-
-    def test_loaded_history_is_lazy_until_popped(self):
-        loaded, state, dataframe = _loaded_project()
-        entry = HistoryEntry(
-            label="cycle 1: points",
-            current_dataset_id=loaded.dataset_id,
-            datasets=[(loaded.dataset_id, copy_loaded_project(loaded))],
-        )
-        history = UndoHistory()
-        history.push(entry)
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "project.eisfit.json"
-            save_project_file(
-                state,
-                path,
-                datasets=[(loaded.dataset_id, state, dataframe)],
-                history=history,
-            )
-            payload = load_json_payload(path)
-            restored_history = load_project_history(payload["history"], path)
-            lazy_entry = restored_history.undo_stack[0]
-            self.assertEqual(lazy_entry.label, "cycle 1: points")
-            self.assertIsNotNone(lazy_entry.payload)
-            self.assertEqual(lazy_entry.datasets, [])
-            # lazy entries serialize back without materializing
-            self.assertEqual(
-                history_to_payload(restored_history)["undo"][0]["label"],
-                "cycle 1: points",
-            )
-            materialized = restored_history.pop_undo()
-            self.assertEqual(
-                [dataset_id for dataset_id, _ in materialized.datasets],
-                [loaded.dataset_id],
-            )
-            np.testing.assert_array_equal(
-                materialized.datasets[0][1].state.active.manually_included,
-                entry.datasets[0][1].state.active.manually_included,
-            )
-
-    def test_missing_history_defaults_to_empty(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "project.eisfit.json"
-            path.write_text("{}", encoding="utf-8")
-            self.assertFalse(load_project_history(None, path).can_undo)
-            self.assertFalse(load_project_history({}, path).can_undo)
-
-    def test_older_payload_without_history_still_loads(self):
+    def test_payload_with_legacy_history_key_still_loads(self):
         state, dataframe = _state(), _dataframe()
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "project.eisfit.json"
             save_project_file(state, path)
             payload = load_json_payload(path)
-            self.assertNotIn("history", payload)
+            payload["history"] = {"limit": 50, "undo": [{"label": "old"}], "redo": []}
             restored = load_project_file(state, dataframe, path, payload=payload)
             np.testing.assert_array_equal(
                 restored.cycles[1].manually_included,
                 state.cycles[1].manually_included,
             )
-            self.assertFalse(load_project_history(payload.get("history"), path).can_undo)
 
 
 class DescribeHistoryChangeTests(unittest.TestCase):

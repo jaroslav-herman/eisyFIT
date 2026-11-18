@@ -327,118 +327,6 @@ def dataframe_from_payload(payload: str):
     return pd.read_json(StringIO(payload), orient="split")
 
 
-def _history_entry_to_payload(entry) -> dict[str, object]:
-    if entry.payload is not None:
-        payload = dict(entry.payload)
-        payload["label"] = entry.label
-        return payload
-    return {
-        "label": entry.label,
-        "current_dataset_id": entry.current_dataset_id,
-        "procedure_blocks": entry.procedure_blocks,
-        "procedures": entry.procedures,
-        "datasets": [
-            {
-                "dataset_id": dataset_id,
-                "dataset_label": loaded.dataset_label,
-                "technique": loaded.technique,
-                "state": _state_to_payload(loaded.state),
-                "dataframe": _dataframe_to_payload(loaded.dataframe),
-            }
-            for dataset_id, loaded in entry.datasets
-        ],
-    }
-
-
-def history_to_payload(history) -> dict[str, object]:
-    return {
-        "limit": int(history.limit),
-        "undo": [_history_entry_to_payload(entry) for entry in history.undo_stack],
-        "redo": [_history_entry_to_payload(entry) for entry in history.redo_stack],
-    }
-
-
-def _history_entry_from_payload(data: dict[str, object], path: Path):
-    from eis_services import HistoryEntry, catalog_spectra, load_project_from_dataframe
-
-    datasets: list[tuple[str, object]] = []
-    for dataset in data.get("datasets", []):
-        if not isinstance(dataset, dict):
-            continue
-        state_payload = dataset.get("state")
-        if not isinstance(state_payload, dict) or "dataframe" not in dataset:
-            continue
-        dataframe = dataframe_from_payload(dataset["dataframe"])
-        source_path = Path(str(state_payload.get("source_path", "restored.eisfit")))
-        loaded = load_project_from_dataframe(
-            dataframe,
-            source_path,
-            int(state_payload.get("active_cycle", 1)),
-            str(state_payload.get("control", "working")),
-            str(state_payload.get("circuit", "R0")),
-            technique=str(dataset.get("technique") or "Saved project"),
-        )
-        restored = load_project_file(loaded.state, dataframe, path, payload=state_payload)
-        loaded.state = restored
-        loaded.spectra = catalog_spectra(
-            dataframe,
-            restored.available_cycles,
-            restored.control,
-            {
-                cycle_number: {**cycle.custom_metadata, "time_s": cycle.time_s}
-                for cycle_number, cycle in restored.cycles.items()
-            },
-        )
-        loaded.dataset_id = str(dataset.get("dataset_id") or loaded.dataset_id)
-        loaded.dataset_label = str(dataset.get("dataset_label") or loaded.dataset_label)
-        datasets.append((loaded.dataset_id, loaded))
-    procedure_blocks = data.get("procedure_blocks")
-    procedures = data.get("procedures")
-    current_dataset_id = data.get("current_dataset_id")
-    return HistoryEntry(
-        label=str(data.get("label") or "change"),
-        current_dataset_id=(
-            str(current_dataset_id) if current_dataset_id else None
-        ),
-        datasets=datasets,
-        procedure_blocks=(
-            procedure_blocks if isinstance(procedure_blocks, dict) else {}
-        ),
-        procedures=procedures if isinstance(procedures, dict) else {},
-    )
-
-
-def load_project_history(history_payload, path: Path):
-    from eis_services import HistoryEntry, UndoHistory
-
-    history = UndoHistory()
-    if not isinstance(history_payload, dict):
-        return history
-    limit = history_payload.get("limit")
-    if isinstance(limit, int) and limit > 0:
-        history.limit = limit
-    # Keep the raw payloads and materialize an entry only when it is popped
-    # for an undo/redo, so loading a project does not pay for the whole stack.
-    history.materializer = lambda payload: _history_entry_from_payload(payload, path)
-    for key, stack in (("undo", history.undo_stack), ("redo", history.redo_stack)):
-        entries = history_payload.get(key)
-        if not isinstance(entries, list):
-            continue
-        for entry_payload in entries:
-            if isinstance(entry_payload, dict):
-                current_dataset_id = entry_payload.get("current_dataset_id")
-                stack.append(
-                    HistoryEntry(
-                        label=str(entry_payload.get("label") or "change"),
-                        current_dataset_id=(
-                            str(current_dataset_id) if current_dataset_id else None
-                        ),
-                        payload=dict(entry_payload),
-                    )
-                )
-    return history
-
-
 _HISTORY_CYCLE_KEY_GROUPS: tuple[tuple[frozenset[str], str], ...] = (
     (frozenset({"manually_included", "outliers"}), "points"),
     (frozenset({"frequency_window", "auto_max_frequency"}), "frequency window"),
@@ -587,15 +475,12 @@ def save_project_file(
     datasets: list[tuple[str, ProjectState, object]] | None = None,
     procedure_blocks: dict[str, list[dict[str, str]]] | None = None,
     procedures: dict[str, list[dict[str, object]]] | None = None,
-    history=None,
 ) -> None:
     payload = _state_to_payload(state)
     if procedure_blocks is not None:
         payload["procedure_blocks"] = procedure_blocks
     if procedures is not None:
         payload["procedures"] = procedures
-    if history is not None:
-        payload["history"] = history_to_payload(history)
     if datasets:
         payload["datasets"] = [
             {

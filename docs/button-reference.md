@@ -23,7 +23,7 @@ This page explains what the visible buttons and menu entries do. Menu labels end
 | Undo (`Ctrl+Z`) | Reverts the most recent project change (points, parameters, circuit, frequency window, fits, DRT results, metadata, imported datasets). The menu label shows what will be undone. |
 | Redo (`Ctrl+Y`) | Reapplies the most recently undone change. |
 
-The undo history keeps the last 50 changes and is stored inside the saved `.eisfit.json` project, so it survives saving and reloading.
+The undo history keeps the last 50 changes for the current session only; it is not stored in the saved `.eisfit.json` project, so saving stays fast and the file stays small.
 
 ### Fit
 

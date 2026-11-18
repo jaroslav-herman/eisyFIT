@@ -60,7 +60,6 @@ from eis_project import (
     export_python_workspace as write_python_workspace,
     describe_history_change,
     load_project_file,
-    load_project_history,
     load_json_payload,
     save_project_file,
 )
@@ -17841,7 +17840,6 @@ class EISApplication:
                 datasets=datasets,
                 procedure_blocks=self.procedure_blocks,
                 procedures=self.procedures,
-                history=self.history,
             )
         except Exception as error:
             messagebox.showerror(
@@ -18330,7 +18328,9 @@ class EISApplication:
         self.procedure_blocks, self.procedures = self._validate_procedure_data(
             payload.get("procedure_blocks"), payload.get("procedures")
         )
-        self.history = load_project_history(payload.get("history"), path)
+        # The undo history is session-only and is not stored in the project
+        # file, so loading always starts with an empty history.
+        self.history = UndoHistory()
         self._saved_project_signature = self._project_signature()
         self._baseline_history()
         self.control = restored.control

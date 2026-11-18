@@ -526,10 +526,6 @@ class HistoryEntry:
     datasets: list[tuple[str, LoadedProject]] = field(default_factory=list)
     procedure_blocks: dict[str, list[dict[str, str]]] = field(default_factory=dict)
     procedures: dict[str, list[dict[str, object]]] = field(default_factory=dict)
-    # Raw serialized form for entries loaded from a project file. Lazy entries
-    # keep datasets empty and are materialized by UndoHistory.materializer
-    # only when they are actually popped for an undo/redo.
-    payload: dict | None = None
 
 
 def copy_loaded_project(loaded: LoadedProject) -> LoadedProject:
@@ -548,11 +544,17 @@ def copy_loaded_project(loaded: LoadedProject) -> LoadedProject:
 
 
 class UndoHistory:
+    """Session-only undo/redo stacks of whole-project snapshots.
+
+    The history is intentionally not persisted to the project file: keeping
+    dozens of full project snapshots in .eisfit.json made saves slow and
+    memory-hungry on large projects and noticeably increased file size.
+    """
+
     def __init__(self, limit: int = HISTORY_LIMIT) -> None:
         self.limit = max(1, int(limit))
         self.undo_stack: list[HistoryEntry] = []
         self.redo_stack: list[HistoryEntry] = []
-        self.materializer = None
 
     @property
     def can_undo(self) -> bool:
@@ -579,20 +581,15 @@ class UndoHistory:
         self.undo_stack.append(entry)
         del self.undo_stack[: -self.limit]
 
-    def _materialize(self, entry: HistoryEntry) -> HistoryEntry:
-        if entry.payload is not None and not entry.datasets and self.materializer:
-            entry = self.materializer(entry.payload)
-        return entry
-
     def pop_undo(self) -> HistoryEntry:
-        return self._materialize(self.undo_stack.pop())
+        return self.undo_stack.pop()
 
     def push_redo(self, entry: HistoryEntry) -> None:
         self.redo_stack.append(entry)
         del self.redo_stack[: -self.limit]
 
     def pop_redo(self) -> HistoryEntry:
-        return self._materialize(self.redo_stack.pop())
+        return self.redo_stack.pop()
 
     def clear(self) -> None:
         self.undo_stack.clear()
