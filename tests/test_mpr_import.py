@@ -30,53 +30,47 @@ class MprImportTests(unittest.TestCase):
         def __init__(self, _root, _path, _available, result):
             self.result = result
 
-    def test_apply_to_all_reuses_selection_for_compatible_files(self):
+    def test_multi_pair_files_auto_select_cell_only_without_dialog(self):
         application = object.__new__(EISApplication)
         application.root = self._FakeRoot()
-        responses = iter(
-            [self._FakeDialog(None, None, None, (["cell", "counter"], True))]
-        )
-        with patch(
-            "eis_gui.ElectrodeSelectionDialog",
-            side_effect=lambda *args: next(responses),
-        ) as dialog:
+        with patch("eis_gui.ElectrodeSelectionDialog") as dialog:
             selected = application._select_import_spectrum_kinds(
                 [
-                    (Path("a.mpt"), ["cell", "counter", "working"]),
+                    (Path("a.mpr"), ["cell", "counter", "working"]),
                     (Path("b.mpr"), ["cell", "counter"]),
                 ]
             )
-        self.assertEqual(dialog.call_count, 1)
-        self.assertEqual(selected[Path("b.mpr").resolve()], ["cell", "counter"])
-
-    def test_apply_to_all_falls_back_when_no_selection_is_compatible(self):
-        application = object.__new__(EISApplication)
-        application.root = self._FakeRoot()
-        responses = iter(
-            [
-                self._FakeDialog(None, None, None, (["working"], True)),
-                self._FakeDialog(None, None, None, (["cell"], False)),
-            ]
-        )
-        with patch(
-            "eis_gui.ElectrodeSelectionDialog",
-            side_effect=lambda *args: next(responses),
-        ) as dialog:
-            selected = application._select_import_spectrum_kinds(
-                [
-                    (Path("a.mpt"), ["cell", "working"]),
-                    (Path("b.mpr"), ["cell", "counter"]),
-                ]
-            )
-        self.assertEqual(dialog.call_count, 2)
+        dialog.assert_not_called()
+        self.assertEqual(selected[Path("a.mpr").resolve()], ["cell"])
         self.assertEqual(selected[Path("b.mpr").resolve()], ["cell"])
 
-    def test_selection_without_apply_to_all_shows_each_dialog(self):
+    def test_dialog_shown_when_cell_pair_is_missing(self):
+        application = object.__new__(EISApplication)
+        application.root = self._FakeRoot()
+        responses = iter(
+            [self._FakeDialog(None, None, None, (["working"], True))]
+        )
+        with patch(
+            "eis_gui.ElectrodeSelectionDialog",
+            side_effect=lambda *args: next(responses),
+        ) as dialog:
+            selected = application._select_import_spectrum_kinds(
+                [
+                    (Path("a.mpr"), ["working", "counter"]),
+                    (Path("b.mpr"), ["working", "counter"]),
+                ]
+            )
+        # "apply to all" reuses the dialog selection for the second file.
+        self.assertEqual(dialog.call_count, 1)
+        self.assertEqual(selected[Path("a.mpr").resolve()], ["working"])
+        self.assertEqual(selected[Path("b.mpr").resolve()], ["working"])
+
+    def test_dialog_selection_without_apply_to_all_shows_each_dialog(self):
         application = object.__new__(EISApplication)
         application.root = self._FakeRoot()
         responses = iter(
             [
-                self._FakeDialog(None, None, None, (["cell"], False)),
+                self._FakeDialog(None, None, None, (["working"], False)),
                 self._FakeDialog(None, None, None, (["counter"], False)),
             ]
         )
@@ -84,13 +78,28 @@ class MprImportTests(unittest.TestCase):
             "eis_gui.ElectrodeSelectionDialog",
             side_effect=lambda *args: next(responses),
         ) as dialog:
-            application._select_import_spectrum_kinds(
+            selected = application._select_import_spectrum_kinds(
                 [
-                    (Path("a.mpt"), ["cell", "counter"]),
-                    (Path("b.mpr"), ["cell", "counter"]),
+                    (Path("a.mpr"), ["working", "counter"]),
+                    (Path("b.mpr"), ["working", "counter"]),
                 ]
             )
         self.assertEqual(dialog.call_count, 2)
+        self.assertEqual(selected[Path("a.mpr").resolve()], ["working"])
+        self.assertEqual(selected[Path("b.mpr").resolve()], ["counter"])
+
+    def test_dialog_cancel_aborts_import(self):
+        application = object.__new__(EISApplication)
+        application.root = self._FakeRoot()
+        responses = iter([self._FakeDialog(None, None, None, None)])
+        with patch(
+            "eis_gui.ElectrodeSelectionDialog",
+            side_effect=lambda *args: next(responses),
+        ):
+            selected = application._select_import_spectrum_kinds(
+                [(Path("a.mpr"), ["working", "counter"])]
+            )
+        self.assertIsNone(selected)
 
     def test_single_role_skips_dialog_and_compatibility_is_safe(self):
         application = object.__new__(EISApplication)

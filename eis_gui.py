@@ -1479,6 +1479,8 @@ class EISApplication:
         self._pixel_aspect_cache: dict[tuple[int, int, int], float] = {}
         self._explorer_format_cache: dict[tuple[str, str], tuple[object, str]] = {}
         self._explorer_last_values: dict[str, list[str]] = {}
+        self._pending_canvas_draws: dict[int, bool] = {}
+        self._figure_layout_size: dict[int, tuple[int, int]] = {}
         self.executor = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="eis-worker"
         )
@@ -3403,6 +3405,7 @@ class EISApplication:
         
         self.figure = Figure(figsize=(7.5, 6.5), dpi=100, constrained_layout=True)
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.plot_pane)
+        self._install_fast_draw_idle(self.canvas)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.canvas.mpl_connect("button_press_event", self._on_plot_button_press)
@@ -3416,6 +3419,7 @@ class EISApplication:
         # Create separate figure for DRT panel
         self.analysis_figure = Figure(figsize=(4.0, 6.5), dpi=100, constrained_layout=True)
         self.analysis_canvas = FigureCanvasTkAgg(self.analysis_figure, master=self.analysis_pane)
+        self._install_fast_draw_idle(self.analysis_canvas)
         self.analysis_canvas.draw()
         self.analysis_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.analysis_canvas.mpl_connect("button_press_event", self._on_plot_button_press)
@@ -3430,6 +3434,51 @@ class EISApplication:
         )
         
         self._configure_plot_layout()
+
+    def _install_fast_draw_idle(self, canvas) -> None:
+        """Route ``draw_idle`` through a layout-skipping draw.
+
+        ``Figure.draw`` re-executes the constrained-layout engine on every
+        draw, which dominates the redraw cost when stepping through spectra.
+        The computed layout only actually changes when the canvas is resized,
+        so redraws at an unchanged size can skip the layout pass entirely.
+        """
+
+        def draw_idle_fast():
+            key = id(canvas)
+            if self._pending_canvas_draws.get(key):
+                return
+            self._pending_canvas_draws[key] = True
+
+            def run():
+                self._pending_canvas_draws[key] = False
+                try:
+                    if canvas.get_tk_widget().winfo_exists():
+                        self._draw_canvas_fast(canvas)
+                except tk.TclError:
+                    pass
+
+            self.root.after_idle(run)
+
+        canvas.draw_idle = draw_idle_fast
+
+    def _draw_canvas_fast(self, canvas) -> None:
+        figure = canvas.figure
+        engine = figure.get_layout_engine()
+        size = canvas.get_width_height()
+        if engine is not None and self._figure_layout_size.get(id(figure)) == size:
+            try:
+                figure.set_layout_engine("none")
+            except RuntimeError:
+                pass  # fall through to a full draw
+            else:
+                try:
+                    canvas.draw()
+                finally:
+                    figure.set_layout_engine(engine)
+                return
+        canvas.draw()
+        self._figure_layout_size[id(figure)] = size
 
     @staticmethod
     def _event_has_control(event) -> bool:
@@ -17500,6 +17549,27 @@ class EISApplication:
             and spectrum.cycle in project.state.available_cycles
             and project.state.control in {"cell", "working", "counter"}
         ]
+        if len(grouped_projects) < 3:
+            # Import auto-selects only the WE-CE spectrum, so the other
+            # electrode pairs may not be loaded; build them on demand from
+            # the same dataframe for this comparison popup.
+            loaded_controls = {project.state.control for project in grouped_projects}
+            for kind in ("cell", "working", "counter"):
+                if kind in loaded_controls:
+                    continue
+                try:
+                    extra = load_project_from_dataframe(
+                        loaded.dataframe,
+                        source_path,
+                        spectrum.cycle,
+                        kind,
+                        self.state.circuit,
+                        technique=loaded.technique,
+                    )
+                except (KeyError, ValueError):
+                    continue
+                if spectrum.cycle in extra.state.available_cycles:
+                    grouped_projects.append(extra)
         if len(grouped_projects) < 2:
             self._update_status(
                 "this source does not contain the cell/working/counter trio"
@@ -17640,6 +17710,12 @@ class EISApplication:
                 if compatible is not None:
                     selected_kinds[path.resolve()] = compatible
                     continue
+            if "cell" in available:
+                # Auto-select only the WE-CE (cell) spectrum: the
+                # reference-electrode pairs (WE-RE, CE-RE) are not imported
+                # unless they are explicitly requested via the dialog.
+                selected_kinds[path.resolve()] = ["cell"]
+                continue
             dialog = ElectrodeSelectionDialog(self.root, path, available)
             self.root.wait_window(dialog)
             if dialog.result is None:
@@ -17765,7 +17841,11 @@ class EISApplication:
         if not self.root.winfo_exists():
             return
         self._history_checkpoint_scheduled = True
-        self.root.after_idle(self._run_history_checkpoint)
+        # Debounce slightly: the checkpoint serializes the project state and is
+        # pure overhead during rapid interactions (e.g. stepping through
+        # spectra with the arrow keys).  undo()/redo() run the checkpoint
+        # directly, so no change is ever lost.
+        self.root.after(200, self._run_history_checkpoint)
 
     def _capture_history_entry(self, label: str) -> HistoryEntry:
         datasets: list[tuple[str, LoadedProject]] = []

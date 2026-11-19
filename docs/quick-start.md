@@ -24,6 +24,7 @@ with the eisyFIT icon, or `eisyFIT.cmd`).
 Use **File → Import data…** (`Ctrl+I`) and select one or more BioLogic `.mpt` files.
 
 - Multiple files can be selected at once; previously loaded spectra are kept.
+- If a three-electrode file contains WE–RE, WE–CE, and CE–RE spectra, only the WE–CE (cell) spectrum is imported automatically; the reference-electrode pairs are skipped.
 - If a text/CSV import dialog appears, choose the cycle column, frequency/impedance columns, and metadata columns, then press **Import**.
 - The imported spectra appear in the **Spectra explorer**.
 
