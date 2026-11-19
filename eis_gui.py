@@ -45,6 +45,7 @@ logging.getLogger("matplotlib.axes._base").addFilter(
 
 from eis_model import CycleState, ParameterValue, ProjectState
 from eis_project import (
+    _dataframe_fingerprint,
     _dataframe_to_payload,
     _state_to_payload,
     _derived_block_values,
@@ -673,6 +674,7 @@ class ParameterTable(ttk.Frame):
         self._name_double_click = name_double_click
         self._display_name = display_name or _external_parameter_name
         self._name_labels = {}
+        self._error_labels: dict[str, tk.Label] = {}
         self._highlighted_names: set[str] = set()
         self._rows: list[
             tuple[
@@ -694,11 +696,18 @@ class ParameterTable(ttk.Frame):
             self.columnconfigure(column, weight=1 if column >= 2 else 0)
 
     def set_parameters(self, parameters: list[ParameterValue]) -> None:
+        if [row[0] for row in self._rows] == [p.name for p in parameters]:
+            # Same parameter set: update the existing widgets in place instead
+            # of destroying and recreating every row.  Rebuilding the rows is
+            # expensive and happens twice on every spectrum switch.
+            self._update_rows(parameters)
+            return
         for child in self.grid_slaves():
             if int(child.grid_info()["row"]) > 0:
                 child.destroy()
         self._rows.clear()
         self._name_labels.clear()
+        self._error_labels.clear()
         for row, parameter in enumerate(parameters, start=1):
             fixed = tk.BooleanVar(value=parameter.fixed)
             initial = tk.StringVar(value=f"{parameter.initial:g}")
@@ -727,14 +736,16 @@ class ParameterTable(ttk.Frame):
                 row=row, column=2, padx=3, pady=2, sticky="ew"
             )
             error_text, error_color = self._format_error(parameter.error_percent)
-            tk.Label(
+            error_label = tk.Label(
                 self,
                 text=error_text,
                 background=error_color,
                 relief=tk.SOLID,
                 borderwidth=1,
                 width=10,
-            ).grid(row=row, column=3, padx=3, pady=2, sticky="ew")
+            )
+            error_label.grid(row=row, column=3, padx=3, pady=2, sticky="ew")
+            self._error_labels[parameter.name] = error_label
             for column, variable in enumerate((lower, upper), start=4):
                 ttk.Entry(self, textvariable=variable, width=10).grid(
                     row=row, column=column, padx=3, pady=2, sticky="ew"
@@ -749,6 +760,27 @@ class ParameterTable(ttk.Frame):
                     lower,
                     upper,
                 )
+            )
+
+    def _update_rows(self, parameters: list[ParameterValue]) -> None:
+        for index, (row, parameter) in enumerate(zip(self._rows, parameters)):
+            name, _unit, _error_percent, fixed, initial, lower, upper = row
+            fixed.set(bool(parameter.fixed))
+            initial.set(f"{parameter.initial:g}")
+            lower.set(f"{parameter.lower:g}")
+            upper.set(f"{parameter.upper:g}")
+            error_text, error_color = self._format_error(parameter.error_percent)
+            error_label = self._error_labels.get(name)
+            if error_label is not None:
+                error_label.configure(text=error_text, background=error_color)
+            self._rows[index] = (
+                name,
+                parameter.unit,
+                parameter.error_percent,
+                fixed,
+                initial,
+                lower,
+                upper,
             )
 
     def set_highlighted_names(self, names: set[str]) -> None:
@@ -1440,9 +1472,13 @@ class EISApplication:
         self._explorer_lookup: dict[tuple[str, int], str] = {}
         self._explorer_anchor_item: str | None = None
         self._explorer_primary_item: str | None = None
+        self._explorer_focus_tagged_item: str | None = None
         self._explorer_navigation_column: str | None = None
         self._suspend_explorer_select = False
         self._explorer_shift_double_click = False
+        self._pixel_aspect_cache: dict[tuple[int, int, int], float] = {}
+        self._explorer_format_cache: dict[tuple[str, str], tuple[object, str]] = {}
+        self._explorer_last_values: dict[str, list[str]] = {}
         self.executor = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="eis-worker"
         )
@@ -5090,8 +5126,11 @@ class EISApplication:
         self.explorer.delete(*self.explorer.get_children())
         self._explorer_rows.clear()
         self._explorer_lookup.clear()
+        self._explorer_format_cache.clear()
+        self._explorer_last_values.clear()
         self._explorer_anchor_item = None
         self._explorer_primary_item = None
+        self._explorer_focus_tagged_item = None
         self.drt_peak_parameters = []
         self._drt_peak_cycle_key = None
         self._drt_peak_drag = None
@@ -5102,12 +5141,14 @@ class EISApplication:
                 item = f"dataset_{dataset_index}_cycle_{spectrum.cycle}"
                 self._explorer_rows[item] = (dataset_id, loaded, spectrum)
                 self._explorer_lookup[(dataset_id, spectrum.cycle)] = item
-                values = [
-                    self._format_explorer_value(
-                        self._explorer_value(loaded, spectrum, column), column
-                    )
-                    for column in self._explorer_columns()
-                ]
+                columns = self._explorer_columns()
+                values = []
+                for column in columns:
+                    raw = self._explorer_value(loaded, spectrum, column)
+                    formatted = self._format_explorer_value(raw, column)
+                    self._explorer_format_cache[(item, column)] = (raw, formatted)
+                    values.append(formatted)
+                self._explorer_last_values[item] = values
                 self.explorer.insert(
                     "",
                     tk.END,
@@ -5304,16 +5345,35 @@ class EISApplication:
     def _refresh_explorer_values(self) -> None:
         if not hasattr(self, "explorer"):
             return
+        columns = self._explorer_columns()
         for item, (_dataset_id, loaded, spectrum) in self._explorer_rows.items():
             if not self.explorer.exists(item):
                 continue
-            values = [
-                self._format_explorer_value(
-                    self._explorer_value(loaded, spectrum, column), column
-                )
-                for column in self._explorer_columns()
-            ]
-            self.explorer.item(item, values=values)
+            values = []
+            for column in columns:
+                raw = self._explorer_value(loaded, spectrum, column)
+                cache_key = (item, column)
+                cached = self._explorer_format_cache.get(cache_key)
+                if cached is not None and self._explorer_raw_equal(cached[0], raw):
+                    values.append(cached[1])
+                else:
+                    formatted = self._format_explorer_value(raw, column)
+                    self._explorer_format_cache[cache_key] = (raw, formatted)
+                    values.append(formatted)
+            # Only touch the Tk item when something actually changed; rewriting
+            # every row on every refresh is slow for projects with many spectra.
+            if self._explorer_last_values.get(item) != values:
+                self._explorer_last_values[item] = values
+                self.explorer.item(item, values=values)
+
+    @staticmethod
+    def _explorer_raw_equal(cached, raw) -> bool:
+        if cached is raw:
+            return True
+        try:
+            return bool(cached == raw)
+        except (TypeError, ValueError):
+            return False
 
     def _select_explorer_spectrum(self, _event=None) -> None:
         if self._suspend_explorer_select or self.busy or self.state is None:
@@ -6860,16 +6920,26 @@ class EISApplication:
     def _refresh_explorer_focus_tag(self) -> None:
         if not hasattr(self, "explorer"):
             return
-        for item in self._explorer_rows:
-            if self.explorer.exists(item):
-                self.explorer.item(item, tags=())
         current_item = None
         if self.current_dataset_id is not None and self.state is not None:
             current_item = self._explorer_lookup.get(
                 (self.current_dataset_id, self.state.active_cycle)
             )
+        # Only "current_row" is ever used as an explorer tag, so instead of
+        # clearing the tags of every row (slow with many spectra), track the
+        # single tagged row and move the tag.
+        previous = self._explorer_focus_tagged_item
+        if (
+            previous is not None
+            and previous != current_item
+            and self.explorer.exists(previous)
+        ):
+            self.explorer.item(previous, tags=())
         if current_item is not None and self.explorer.exists(current_item):
             self.explorer.item(current_item, tags=("current_row",))
+            self._explorer_focus_tagged_item = current_item
+        else:
+            self._explorer_focus_tagged_item = None
 
     def _activate_explorer_item(self, item: str) -> None:
         row = self._explorer_rows.get(item)
@@ -9976,8 +10046,23 @@ class EISApplication:
             self.axes.set_xlim(x_min - x_padding, x_max + x_padding)
             self.axes.set_ylim(y_min - y_padding, y_max + y_padding)
 
-    @staticmethod
-    def _axes_pixel_aspect(axes, figure) -> float | None:
+    def _axes_pixel_aspect(self, axes, figure) -> float | None:
+        # The pixel aspect only changes when the canvas is resized, so cache it
+        # per canvas size.  Computing it requires a full layout pass
+        # (draw_without_rendering), which is far too expensive to run on every
+        # plot refresh (e.g. on every spectrum switch).
+        canvas = getattr(figure, "canvas", None)
+        cache_key = None
+        if canvas is not None:
+            try:
+                width, height = canvas.get_width_height()
+                cache_key = (id(axes), int(width), int(height))
+            except Exception:
+                cache_key = None
+        if cache_key is not None:
+            cached = self._pixel_aspect_cache.get(cache_key)
+            if cached is not None:
+                return cached
         limits = (axes.get_xlim(), axes.get_ylim())
         try:
             figure.draw_without_rendering()
@@ -9991,6 +10076,10 @@ class EISApplication:
         )
         axes.set_xlim(*limits[0])
         axes.set_ylim(*limits[1])
+        if cache_key is not None and aspect is not None:
+            if len(self._pixel_aspect_cache) > 32:
+                self._pixel_aspect_cache.clear()
+            self._pixel_aspect_cache[cache_key] = aspect
         return aspect
 
     def _expand_limits_for_equal_aspect(self, axes) -> None:
@@ -11443,8 +11532,11 @@ class EISApplication:
         self._custom_metadata_columns.clear()
         self._explorer_rows.clear()
         self._explorer_lookup.clear()
+        self._explorer_format_cache.clear()
+        self._explorer_last_values.clear()
         self._explorer_anchor_item = None
         self._explorer_primary_item = None
+        self._explorer_focus_tagged_item = None
         self.explorer.delete(*self.explorer.get_children())
         self.cycle_var.set("")
         self.parameter_table.set_parameters([])
@@ -17617,6 +17709,36 @@ class EISApplication:
             )
         return datasets
 
+    def _light_project_payload(self) -> list | None:
+        # Like _project_payload, but the dataframe is represented by a cheap
+        # fingerprint instead of its full JSON serialization.  Used for the
+        # undo-history checkpoint, which runs after nearly every UI action;
+        # describe_history_change only compares the dataframe fields by
+        # equality, so a fingerprint is sufficient there.
+        if self.state is None:
+            return None
+        datasets = []
+        for dataset_id in self._dataset_order:
+            loaded = self.loaded_projects.get(dataset_id)
+            if loaded is None:
+                continue
+            datasets.append(
+                {
+                    "dataset_id": dataset_id,
+                    "state": _state_to_payload(loaded.state),
+                    "dataframe": _dataframe_fingerprint(loaded.dataframe),
+                }
+            )
+        if not datasets:
+            datasets.append(
+                {
+                    "dataset_id": self.current_dataset_id,
+                    "state": _state_to_payload(self.state),
+                    "dataframe": _dataframe_fingerprint(self.loaded.dataframe),
+                }
+            )
+        return datasets
+
     def _project_signature(self) -> str | None:
         payload = self._project_payload()
         if payload is None:
@@ -17665,7 +17787,7 @@ class EISApplication:
         self._history_checkpoint_scheduled = False
         if self.state is None or self.busy or self._history_suspended:
             return
-        payload = self._project_payload()
+        payload = self._light_project_payload()
         if payload is None:
             return
         signature = json.dumps(payload, sort_keys=True, default=str)
@@ -17688,7 +17810,7 @@ class EISApplication:
     def _baseline_history(self) -> None:
         self._history_suspended = True
         try:
-            self._history_payload = self._project_payload()
+            self._history_payload = self._light_project_payload()
             self._history_signature = (
                 json.dumps(self._history_payload, sort_keys=True, default=str)
                 if self._history_payload is not None
@@ -17750,7 +17872,7 @@ class EISApplication:
             self._restore_controls()
             self._refresh_plot(rescale=True)
             self._set_controls_enabled(True)
-            self._history_payload = self._project_payload()
+            self._history_payload = self._light_project_payload()
             self._history_signature = (
                 json.dumps(self._history_payload, sort_keys=True, default=str)
                 if self._history_payload is not None

@@ -321,6 +321,21 @@ def _dataframe_to_payload(dataframe) -> str:
     return dataframe.to_json(orient="split", date_format="iso")
 
 
+def _dataframe_fingerprint(dataframe) -> str:
+    """Cheap change detector for a dataframe.
+
+    Serializing the full dataframe with ``to_json`` is far too expensive to do
+    on every UI checkpoint; a value hash detects the same changes in a fraction
+    of the time.  Only used for change detection, never for persistence.
+    """
+    import hashlib
+
+    import pandas as pd
+
+    hashes = pd.util.hash_pandas_object(dataframe, index=True)
+    return hashlib.sha256(hashes.to_numpy().tobytes()).hexdigest()
+
+
 def dataframe_from_payload(payload: str):
     import pandas as pd
 
