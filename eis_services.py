@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass, field, replace
 import multiprocessing as mp
+import os
 from pathlib import Path
 import re
 import threading
@@ -777,11 +778,55 @@ def _fit_cycle_process_entry(connection) -> None:
             try:
                 connection.send((True, fit_cycle(state, circuit, parameters, options)))
             except BaseException as error:
-                connection.send((False, f"{type(error).__name__}: {error}"))
+                try:
+                    # Send the exception itself so the caller can re-raise the
+                    # original type instead of a generic RuntimeError.
+                    connection.send((False, error))
+                except Exception:
+                    connection.send((False, RuntimeError(f"{type(error).__name__}: {error}")))
     except (EOFError, OSError):
         return
     finally:
         connection.close()
+
+
+def _shutdown_fit_worker(process, connection) -> None:
+    """Terminate a fit worker and clear the cached worker handles."""
+    global _FIT_WORKER_PROCESS, _FIT_WORKER_CONNECTION
+    if process.is_alive():
+        process.terminate()
+        process.join()
+    connection.close()
+    _FIT_WORKER_PROCESS = None
+    _FIT_WORKER_CONNECTION = None
+
+
+def _start_fit_worker(context, sender):
+    """Start the fit worker process with a single BLAS thread.
+
+    A freshly spawned process re-initializes OpenBLAS, which allocates one
+    buffer per core by default; on memory-constrained machines (small paging
+    file) that allocation can fail and kill the worker within seconds of any
+    fit, regardless of the configured time limit. EIS spectra are small, so
+    a single BLAS thread loses nothing. Explicitly user-set variables win.
+    """
+    thread_keys = (
+        "OPENBLAS_NUM_THREADS",
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    )
+    added = [key for key in thread_keys if key not in os.environ]
+    for key in added:
+        os.environ[key] = "1"
+    try:
+        process = context.Process(target=_fit_cycle_process_entry, args=(sender,))
+        process.daemon = True
+        process.start()
+    finally:
+        for key in added:
+            os.environ.pop(key, None)
+    return process
 
 
 def _safe_unique_ints(values: Iterable[object]) -> list[int]:
@@ -2069,6 +2114,27 @@ def _validate_circuit_jacobian(frequency, circuit, values, names, free_indices, 
         raise JacobianUnsupported(f"derivative validation failed (relative maximum {difference:.3g})")
 
 
+def _model_fit_curve(
+    frequency: np.ndarray,
+    circuit: str,
+    parameters: np.ndarray,
+    points: int = 200,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Model impedance over the data frequency range.
+
+    Local replacement for ``wepy.eis.show_fit``: importing ``wepy.eis`` pulls in
+    hybdrt/cvxopt/matplotlib, which can fail inside the spawned fit worker, so
+    the fit path must only depend on impedance.py.
+    """
+    from impedance.models.circuits import CustomCircuit
+
+    values = np.asarray(parameters, dtype=float)
+    model = CustomCircuit(circuit, initial_guess=values)
+    model.parameters_ = values
+    fit_frequency = np.logspace(np.log10(frequency[0]), np.log10(frequency[-1]), points)
+    return fit_frequency, as_1d_array(model.predict(fit_frequency))
+
+
 def _fit_cycle_impl(
     state: CycleState,
     circuit: str,
@@ -2078,7 +2144,6 @@ def _fit_cycle_impl(
 ) -> FitResult:
     from impedance.models.circuits import CustomCircuit
     from scipy.optimize import least_squares
-    from wepy.eis import show_fit
 
     options = (options or FitOptions()).validated()
     included = state.included
@@ -2131,7 +2196,7 @@ def _fit_cycle_impl(
         errors_percent[near_zero] = np.inf
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="Simulating circuit based on initial parameters", category=UserWarning)
-            fit_frequency, fit_impedance = show_fit(frequency, circuit, fitted, points=200)
+            fit_frequency, fit_impedance = _model_fit_curve(frequency, circuit, fitted, points=200)
         fitted_model = CustomCircuit(circuit, initial_guess=fitted)
         fitted_model.parameters_ = fitted
         fit_at_data = as_1d_array(fitted_model.predict(state.frequency_hz))
@@ -2312,7 +2377,7 @@ def _fit_cycle_impl(
             message="Simulating circuit based on initial parameters",
             category=UserWarning,
         )
-        fit_frequency, fit_impedance = show_fit(
+        fit_frequency, fit_impedance = _model_fit_curve(
             frequency,
             circuit,
             circuit_parameters_only,
@@ -2363,9 +2428,7 @@ def fit_cycle_with_timeout(
             if _FIT_WORKER_CONNECTION is not None:
                 _FIT_WORKER_CONNECTION.close()
             receiver, sender = context.Pipe(duplex=True)
-            process = context.Process(target=_fit_cycle_process_entry, args=(sender,))
-            process.daemon = True
-            process.start()
+            process = _start_fit_worker(context, sender)
             sender.close()
             _FIT_WORKER_PROCESS = process
             _FIT_WORKER_CONNECTION = receiver
@@ -2374,25 +2437,25 @@ def fit_cycle_with_timeout(
         process = _FIT_WORKER_PROCESS
         try:
             connection.send((state, circuit, parameters, options or FitOptions()))
-            if not connection.poll(timeout_seconds):
-                process.terminate()
-                process.join()
-                connection.close()
-                _FIT_WORKER_PROCESS = None
-                _FIT_WORKER_CONNECTION = None
-                raise FitTimeoutError(
-                    f"The EEC fit exceeded the {timeout_seconds:g} s time limit"
-                )
+        except (EOFError, OSError) as error:
+            _shutdown_fit_worker(process, connection)
+            raise RuntimeError("The EEC fit worker stopped unexpectedly") from error
+        # FitTimeoutError derives from TimeoutError, which is an OSError on
+        # Python >= 3.10, so the timeout raise must stay outside any
+        # "except (EOFError, OSError)" handler to reach the caller unchanged.
+        if not connection.poll(timeout_seconds):
+            _shutdown_fit_worker(process, connection)
+            raise FitTimeoutError(
+                f"The EEC fit exceeded the {timeout_seconds:g} s time limit"
+            )
+        try:
             succeeded, payload = connection.recv()
         except (EOFError, OSError) as error:
-            if process.is_alive():
-                process.terminate()
-                process.join()
-            connection.close()
-            _FIT_WORKER_PROCESS = None
-            _FIT_WORKER_CONNECTION = None
+            _shutdown_fit_worker(process, connection)
             raise RuntimeError("The EEC fit worker stopped unexpectedly") from error
     if not succeeded:
+        if isinstance(payload, BaseException):
+            raise payload
         raise RuntimeError(str(payload))
     return payload
 
