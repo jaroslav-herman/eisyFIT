@@ -92,5 +92,41 @@ class ProjectCompressionTests(unittest.TestCase):
             self.assertEqual(json.loads(text)["version"], 4)
 
 
+class StreamingJsonWriterTests(unittest.TestCase):
+    def _payload(self):
+        return {
+            "format": "eis-fitting-project",
+            "version": 4,
+            "nested": {"a": [1.5, 2.5, None], "b": "text\u016f"},
+            "cycles": {"1": {"f": [100.0, 10.0, 1.0], "z": [1.0, 2.0, 3.0]}},
+        }
+
+    def test_streamed_bytes_match_one_shot_serialization(self):
+        from eis_project import _json_bytes
+
+        payload = self._payload()
+        expected_gz = gzip.compress(
+            json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8"),
+            compresslevel=9,
+            mtime=0,
+        )
+        self.assertEqual(_json_bytes(payload, compressed=True), expected_gz)
+        expected_plain = json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
+        self.assertEqual(_json_bytes(payload, compressed=False), expected_plain)
+
+    def test_payload_signature_is_stable_and_sensitive(self):
+        from eis_project import payload_signature
+
+        payload = self._payload()
+        self.assertEqual(payload_signature(payload), payload_signature(self._payload()))
+        changed = self._payload()
+        changed["version"] = 5
+        self.assertNotEqual(payload_signature(payload), payload_signature(changed))
+        # Key order must not matter, matching the old sort_keys=True behavior.
+        reordered = {"version": 4, "format": "eis-fitting-project",
+                     "cycles": payload["cycles"], "nested": payload["nested"]}
+        self.assertEqual(payload_signature(payload), payload_signature(reordered))
+
+
 if __name__ == "__main__":
     unittest.main()

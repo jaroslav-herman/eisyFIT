@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import csv
 import gzip
-from io import StringIO
+import hashlib
+from io import BytesIO, StringIO
 import json
 import re
 from pathlib import Path
@@ -10,11 +11,25 @@ from pathlib import Path
 import numpy as np
 
 from eis_model import CycleState, ParameterValue, ProjectState, as_1d_array
-from wepy.eis import capacitance as cpe_capacitance
-from wepy.eis import tau as cpe_tau
 
 PROJECT_FORMAT = "eis-fitting-project"
 PROJECT_VERSION = 4
+
+
+def cpe_capacitance(R, Q, alpha):
+    """Effective double-layer capacitance of a CPE branch.
+
+    Same formula as ``wepy.eis.capacitance``; defined locally so that
+    importing this module (and therefore saving/loading projects) does not
+    pull in wepy.eis, which imports hybdrt/cvxopt/matplotlib at module level
+    and can fail on memory-constrained machines.
+    """
+    return float(Q ** (1.0 / alpha) * R ** ((1.0 - alpha) / alpha))
+
+
+def cpe_tau(R, Q, alpha):
+    """CPE time constant tau = R * C (same formula as ``wepy.eis.tau``)."""
+    return float(R * cpe_capacitance(R, Q, alpha))
 
 
 def load_json_payload(path: Path) -> dict[str, object]:
@@ -32,13 +47,51 @@ def _is_gzip_path(path: Path) -> bool:
     return path.suffix.lower() == ".gz"
 
 
-def _json_bytes(payload: dict[str, object], *, compressed: bool) -> bytes:
+def _json_encoder(*, compressed: bool) -> json.JSONEncoder:
     if compressed:
-        raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode(
-            "utf-8"
-        )
-        return gzip.compress(raw, compresslevel=9, mtime=0)
-    return json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
+        return json.JSONEncoder(separators=(",", ":"), ensure_ascii=False)
+    return json.JSONEncoder(indent=2, ensure_ascii=False)
+
+
+def _write_json_stream(payload, fileobj, *, compressed: bool) -> None:
+    """Stream-serialize ``payload`` into a binary file object.
+
+    ``json.dumps`` materializes the whole document as a str, ``.encode()``
+    makes a full bytes copy, and ``gzip.compress`` another full copy on top;
+    saving a multi-dataset project that way can fail with MemoryError on
+    memory-constrained machines. Streaming ``iterencode`` chunks keeps only
+    one small chunk in memory at a time.
+    """
+    encoder = _json_encoder(compressed=compressed)
+    if compressed:
+        with gzip.GzipFile(
+            filename="", mode="wb", fileobj=fileobj, compresslevel=9, mtime=0
+        ) as compressed_file:
+            for chunk in encoder.iterencode(payload):
+                compressed_file.write(chunk.encode("utf-8"))
+    else:
+        for chunk in encoder.iterencode(payload):
+            fileobj.write(chunk.encode("utf-8"))
+
+
+def _json_bytes(payload: dict[str, object], *, compressed: bool) -> bytes:
+    buffer = BytesIO()
+    _write_json_stream(payload, buffer, compressed=compressed)
+    return buffer.getvalue()
+
+
+def payload_signature(payload) -> str:
+    """Stable, memory-cheap signature of a payload.
+
+    Hashes the canonical JSON stream chunk-by-chunk instead of building one
+    giant ``json.dumps(..., sort_keys=True)`` string; used for unsaved-change
+    and undo-history comparisons, which only need equality, not the document.
+    """
+    digest = hashlib.sha256()
+    encoder = json.JSONEncoder(sort_keys=True, default=str)
+    for chunk in encoder.iterencode(payload):
+        digest.update(chunk.encode("utf-8"))
+    return digest.hexdigest()
 
 
 def _external_parameter_name(name: str) -> str:
@@ -506,7 +559,8 @@ def save_project_file(
             for dataset_id, dataset_state, dataframe in datasets
         ]
     temporary = path.with_suffix(f"{path.suffix}.tmp")
-    temporary.write_bytes(_json_bytes(payload, compressed=_is_gzip_path(path)))
+    with open(temporary, "wb") as fileobj:
+        _write_json_stream(payload, fileobj, compressed=_is_gzip_path(path))
     temporary.replace(path)
 
 

@@ -27,7 +27,6 @@ import numpy as np
 from natsort import natsort_keygen, ns
 from scipy.optimize import curve_fit
 from scipy.special import voigt_profile
-from wepy.eis import tau as cpe_tau
 
 
 class _IgnoreFixedAspectLimitsFilter(logging.Filter):
@@ -54,6 +53,7 @@ from eis_project import (
     _externalize_record,
     _dataframe_to_payload,
     _state_to_payload,
+    cpe_tau,
     dataframe_from_payload,
     export_drts_for_states,
     export_fit_parameters,
@@ -62,6 +62,7 @@ from eis_project import (
     describe_history_change,
     load_project_file,
     load_json_payload,
+    payload_signature,
     save_project_file,
 )
 from eis_services import (
@@ -17816,10 +17817,14 @@ class EISApplication:
         return datasets
 
     def _project_signature(self) -> str | None:
-        payload = self._project_payload()
+        # The light payload (dataframe fingerprint instead of full JSON) is
+        # enough for change detection and avoids serializing every dataframe
+        # on each check; payload_signature hashes the JSON stream chunk by
+        # chunk instead of building one giant string.
+        payload = self._light_project_payload()
         if payload is None:
             return None
-        return json.dumps(payload, sort_keys=True, default=str)
+        return payload_signature(payload)
 
     def _project_has_unsaved_changes(self) -> bool:
         if self.state is None:
@@ -17870,7 +17875,7 @@ class EISApplication:
         payload = self._light_project_payload()
         if payload is None:
             return
-        signature = json.dumps(payload, sort_keys=True, default=str)
+        signature = payload_signature(payload)
         if signature == self._history_signature:
             return
         if self._history_signature is None:
@@ -17892,7 +17897,7 @@ class EISApplication:
         try:
             self._history_payload = self._light_project_payload()
             self._history_signature = (
-                json.dumps(self._history_payload, sort_keys=True, default=str)
+                payload_signature(self._history_payload)
                 if self._history_payload is not None
                 else None
             )
@@ -17954,7 +17959,7 @@ class EISApplication:
             self._set_controls_enabled(True)
             self._history_payload = self._light_project_payload()
             self._history_signature = (
-                json.dumps(self._history_payload, sort_keys=True, default=str)
+                payload_signature(self._history_payload)
                 if self._history_payload is not None
                 else None
             )
