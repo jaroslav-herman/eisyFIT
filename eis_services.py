@@ -2114,11 +2114,100 @@ def _validate_circuit_jacobian(frequency, circuit, values, names, free_indices, 
         raise JacobianUnsupported(f"derivative validation failed (relative maximum {difference:.3g})")
 
 
+_ELEMENT_PARAM_COUNTS = {
+    "R": 1, "C": 1, "L": 1, "W": 1, "Wo": 2, "Ws": 2, "CPE": 2,
+    "La": 2, "G": 2, "Gs": 3, "K": 2, "Zarc": 3,
+}
+
+
+def _compile_circuit_predict(circuit: str, parameter_names, frequency, values):
+    """Compile a supported circuit string into a fast ``predict(f, values)``.
+
+    impedance.py evaluates a circuit by building and ``eval()``-ing an
+    expression string on *every* call, which dominates fit time because the
+    optimizer calls the model once per iteration (and once per parameter for
+    a numerical Jacobian). Evaluating the parsed tree directly with numpy is
+    bit-identical for the supported elements and orders of magnitude faster.
+
+    Returns None when the circuit uses unsupported syntax or disagrees with
+    impedance.py, so callers can fall back to the stock evaluator.
+    """
+    try:
+        root = _parse_jacobian_circuit(circuit)
+    except JacobianUnsupported:
+        return None
+    from impedance.models.circuits.elements import get_element_from_name
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        if node.kind == "element":
+            if _ELEMENT_PARAM_COUNTS.get(get_element_from_name(node.token)) is None:
+                return None
+        else:
+            stack.extend(node.children)
+    name_to_index = {name: index for index, name in enumerate(parameter_names)}
+    values = np.asarray(values, dtype=float)
+
+    def predict(frequencies, parameter_values):
+        freq = np.asarray(frequencies, dtype=float)
+        vals = np.asarray(parameter_values, dtype=float)
+
+        def evaluate(node):
+            if node.kind == "element":
+                element = get_element_from_name(node.token)
+                count = _ELEMENT_PARAM_COUNTS.get(element)
+                if count is None:
+                    raise JacobianUnsupported(f"element {element} has no fast evaluator")
+                local_names = [node.token if count == 1 else f"{node.token}_{i}" for i in range(count)]
+                try:
+                    local_values = np.array([vals[name_to_index[name]] for name in local_names])
+                except KeyError as error:
+                    raise JacobianUnsupported(f"missing parameter {error.args[0]}") from error
+                return _element_impedance_derivatives(node.token, local_values, freq)[0]
+            children = [evaluate(child) for child in node.children]
+            if node.kind == "series":
+                return sum(children)
+            admittance = sum((1.0 / child for child in children))
+            return 1.0 / admittance
+
+        try:
+            with np.errstate(all="ignore"):
+                return evaluate(root)
+        except JacobianUnsupported:
+            # Singular intermediate parameters (e.g. a zero time constant):
+            # degrade to impedance.py's evaluator so the optimizer sees the
+            # same inf/nan instead of an exception.
+            from impedance.models.circuits import CustomCircuit
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                model = CustomCircuit(circuit, initial_guess=vals)
+                model.parameters_ = vals
+                return model.predict(freq)
+
+    # Validate once against impedance.py so a parser/element mismatch can never
+    # silently change fit results.
+    try:
+        from impedance.models.circuits import CustomCircuit
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            reference = CustomCircuit(circuit, initial_guess=values)
+            reference.parameters_ = values
+            reference_z = as_1d_array(reference.predict(frequency))
+        fast_z = as_1d_array(predict(frequency, values))
+        scale = max(1.0, float(np.max(np.abs(reference_z))) if reference_z.size else 1.0)
+        if not np.allclose(fast_z, reference_z, rtol=1e-9, atol=1e-12 * scale):
+            return None
+    except Exception:
+        return None
+    return predict
+
+
 def _model_fit_curve(
     frequency: np.ndarray,
     circuit: str,
     parameters: np.ndarray,
     points: int = 200,
+    compiled_predict=None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Model impedance over the data frequency range.
 
@@ -2126,12 +2215,14 @@ def _model_fit_curve(
     hybdrt/cvxopt/matplotlib, which can fail inside the spawned fit worker, so
     the fit path must only depend on impedance.py.
     """
+    values = np.asarray(parameters, dtype=float)
+    fit_frequency = np.logspace(np.log10(frequency[0]), np.log10(frequency[-1]), points)
+    if compiled_predict is not None:
+        return fit_frequency, as_1d_array(compiled_predict(fit_frequency, values))
     from impedance.models.circuits import CustomCircuit
 
-    values = np.asarray(parameters, dtype=float)
     model = CustomCircuit(circuit, initial_guess=values)
     model.parameters_ = values
-    fit_frequency = np.logspace(np.log10(frequency[0]), np.log10(frequency[-1]), points)
     return fit_frequency, as_1d_array(model.predict(fit_frequency))
 
 
@@ -2163,26 +2254,70 @@ def _fit_cycle_impl(
     started = time.perf_counter()
     free_indices = [index for index, parameter in enumerate(parameters) if not parameter.fixed]
 
+    # Fast circuit evaluator: impedance.py re-evals a built expression string
+    # on every model call, which dominates fit time. Compiled prediction is
+    # bit-identical (validated against CustomCircuit below) and falls back to
+    # None for unsupported circuits.
+    compiled_predict = None
+    try:
+        parameter_names, _units = CustomCircuit(
+            circuit, initial_guess=initial_parameters
+        ).get_param_names()
+        compiled_predict = _compile_circuit_predict(
+            circuit, parameter_names, frequency, initial_parameters
+        )
+    except Exception:
+        compiled_predict = None
+
     # Keep the default path identical to the pre-extension impedance.py path.
     # This preserves curve_fit's optimizer, weighting, and uncertainty semantics.
     if options.stages() == ("least_squares",) and options.resolved_jacobian_mode() == "numerical":
-        from impedance.models.circuits.fitting import circuit_fit
-
         fitted = initial_parameters.copy()
         absolute_errors = np.zeros(len(parameters), dtype=float)
         if free_parameters:
-            fitted_free, errors_free = circuit_fit(
-                frequency,
-                impedance,
-                circuit,
-                [parameter.initial for parameter in free_parameters],
-                constants=fixed_constants,
-                bounds=(
-                    [parameter.lower for parameter in free_parameters],
-                    [parameter.upper for parameter in free_parameters],
-                ),
-                weight_by_modulus=options.weight_by_modulus,
-            )
+            if compiled_predict is not None:
+                from scipy.optimize import curve_fit
+
+                def _model(freqs, *free_values):
+                    full = initial_parameters.copy()
+                    full[free_indices] = free_values
+                    z = compiled_predict(freqs, full)
+                    return np.hstack((z.real, z.imag))
+
+                sigma = None
+                if options.weight_by_modulus:
+                    abs_z = np.abs(impedance)
+                    sigma = np.hstack((abs_z, abs_z))
+                popt, pcov = curve_fit(
+                    _model,
+                    frequency,
+                    np.hstack((impedance.real, impedance.imag)),
+                    p0=[parameter.initial for parameter in free_parameters],
+                    bounds=(
+                        [parameter.lower for parameter in free_parameters],
+                        [parameter.upper for parameter in free_parameters],
+                    ),
+                    sigma=sigma,
+                    maxfev=100000,
+                    ftol=1e-13,
+                )
+                fitted_free = as_1d_array(popt).astype(float)
+                errors_free = np.sqrt(np.diag(pcov))
+            else:
+                from impedance.models.circuits.fitting import circuit_fit
+
+                fitted_free, errors_free = circuit_fit(
+                    frequency,
+                    impedance,
+                    circuit,
+                    [parameter.initial for parameter in free_parameters],
+                    constants=fixed_constants,
+                    bounds=(
+                        [parameter.lower for parameter in free_parameters],
+                        [parameter.upper for parameter in free_parameters],
+                    ),
+                    weight_by_modulus=options.weight_by_modulus,
+                )
             fitted_free = as_1d_array(fitted_free).astype(float)
             errors_free = np.abs(as_1d_array(errors_free).astype(float))
             fitted[free_indices] = fitted_free
@@ -2196,10 +2331,15 @@ def _fit_cycle_impl(
         errors_percent[near_zero] = np.inf
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="Simulating circuit based on initial parameters", category=UserWarning)
-            fit_frequency, fit_impedance = _model_fit_curve(frequency, circuit, fitted, points=200)
-        fitted_model = CustomCircuit(circuit, initial_guess=fitted)
-        fitted_model.parameters_ = fitted
-        fit_at_data = as_1d_array(fitted_model.predict(state.frequency_hz))
+            fit_frequency, fit_impedance = _model_fit_curve(
+                frequency, circuit, fitted, points=200, compiled_predict=compiled_predict
+            )
+        if compiled_predict is not None:
+            fit_at_data = as_1d_array(compiled_predict(state.frequency_hz, fitted))
+        else:
+            fitted_model = CustomCircuit(circuit, initial_guess=fitted)
+            fitted_model.parameters_ = fitted
+            fit_at_data = as_1d_array(fitted_model.predict(state.frequency_hz))
         difference = fit_at_data[included] - state.impedance[included]
         if options.weight_by_modulus:
             difference = difference / np.maximum(np.abs(state.impedance[included]), np.finfo(float).eps)
@@ -2226,6 +2366,8 @@ def _fit_cycle_impl(
     def predict(values: np.ndarray, frequencies=frequency) -> np.ndarray:
         full = initial_parameters.copy()
         full[free_indices] = values
+        if compiled_predict is not None:
+            return as_1d_array(compiled_predict(frequencies, full)).astype(complex)
         model = CustomCircuit(circuit, initial_guess=full)
         model.parameters_ = full
         return as_1d_array(model.predict(frequencies)).astype(complex)
@@ -2382,10 +2524,14 @@ def _fit_cycle_impl(
             circuit,
             circuit_parameters_only,
             points=200,
+            compiled_predict=compiled_predict,
         )
-    fitted_model = CustomCircuit(circuit, initial_guess=circuit_parameters_only)
-    fitted_model.parameters_ = circuit_parameters_only
-    fit_at_data = fitted_model.predict(state.frequency_hz)
+    if compiled_predict is not None:
+        fit_at_data = as_1d_array(compiled_predict(state.frequency_hz, circuit_parameters_only))
+    else:
+        fitted_model = CustomCircuit(circuit, initial_guess=circuit_parameters_only)
+        fitted_model.parameters_ = circuit_parameters_only
+        fit_at_data = fitted_model.predict(state.frequency_hz)
     final_residual = residual(current) if free_parameters else np.concatenate(((predict(np.array([])) - impedance).real, (predict(np.array([])) - impedance).imag))
     objective_value = float(np.sum(final_residual ** 2))
     return FitResult(
