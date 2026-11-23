@@ -54,3 +54,32 @@ Use **File → Load ML results file…** to load a saved ML results file. The re
 - **Suggest EEC initials…** in the Fit menu or Actions group suggests initial values from compatible fitted spectra without using the ML pipelines.
 - **Detect EEC parameter anomalies…** compares selected fitted parameter vectors against a calibration set.
 - **Auto model: selected (Hybrid DRT)** suggests a model from Hybrid DRT analysis rather than ML.
+
+## Correction memory: learning from your manual fixes
+
+Some spectra are still fitted badly after the ML pipeline and need manual
+corrections. The correction memory records what you do and replays it on
+similar spectra — no model is trained.
+
+1. Enable **Record my correction steps** in **Preferences → ML pipelines**.
+   While on, every parameter, model, point-selection, or frequency-window
+   change is appended to a sidecar next to the project,
+   `<project>_user_actions.json`, keyed by a path-independent spectrum
+   identifier. Raw measured arrays are never duplicated in the sidecar.
+2. Correct a few badly fitted spectra by hand as usual (edit parameters or
+   bounds, refit), and save the project.
+3. Run **Suggest corrections…** from the menu bar (with the affected spectra
+   selected, or with nothing selected to check the whole dataset). Spectra
+   whose fitted parameters deviate from the smooth trend over time, voltage,
+   current, cycle, and cycle mod are flagged (robust z above the configured
+   **bad-fit parameter z threshold**); for each flagged spectrum, the nearest
+   logged corrections in that feature space are proposed, with parameter names
+   mapped structurally when the EEC topology differs.
+4. Review the proposal table and confirm **Apply selected and refit** (or
+   **Apply selected**). Nothing changes until you confirm; every applied
+   correction is undoable with Ctrl+Z and, while recording is on, is itself
+   logged with `applied_by: "replay"` plus its source corrections.
+
+Only parameter and (structurally equivalent) circuit changes are replayed;
+point masks and frequency windows are spectrum-specific and are never
+force-matched onto another spectrum.

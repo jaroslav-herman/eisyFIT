@@ -193,6 +193,11 @@ def _anomaly_parameter_transform(name: str, value: float) -> float | None:
     return value
 
 
+# Public alias so the correction-replay module can reuse the exact same
+# per-parameter transform without duplicating the rules.
+anomaly_parameter_transform = _anomaly_parameter_transform
+
+
 def _anomaly_score(residual: float, lower: float, upper: float) -> tuple[float, bool]:
     if residual < lower:
         denominator = max(abs(lower), np.finfo(float).eps)

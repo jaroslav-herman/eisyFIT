@@ -120,6 +120,23 @@ from ml.runtime_inference import (
     save_runtime_results,
 )
 from ml.number_aware_pipeline import infer_bundle_records, load_pipeline_bundle
+from ml.user_actions import (
+    append_user_actions,
+    correction_entries,
+    diff_state_payloads,
+    load_user_actions,
+    make_action_entry,
+    relative_fit_residual,
+    user_actions_path_for,
+)
+from ml.correction_replay import (
+    DEFAULT_SIMILARITY_FEATURES,
+    SpectrumFitSnapshot,
+    effective_features,
+    flag_bad_fits,
+    propose_corrections,
+    resolve_feature,
+)
 from spectrum_simulator import logarithmic_frequencies, simulate_spectrum
 
 
@@ -1455,6 +1472,14 @@ class EISApplication:
         self._preferences_path = self._preferences_file_path()
         self._procedure_library_blocks: dict[str, list[dict[str, str]]] = {}
         self._procedure_library: dict[str, list[dict[str, object]]] = {}
+        # Correction memory: opt-in recording of manual correction steps into a
+        # sidecar next to the project, plus the bad-fit z threshold used by
+        # "Suggest corrections…".
+        self._record_user_actions = False
+        self._correction_z_threshold = "4"
+        self._replay_in_progress = False
+        self._pending_replay_sources: dict[str, tuple[dict, ...]] = {}
+        self._last_correction_proposals = None
         self._model_presets = self._load_preferences()
         self.analysis_mode_var = tk.StringVar(value="EEC")
         self.loaded: LoadedProject | None = None
@@ -1798,6 +1823,10 @@ class EISApplication:
         menu_bar.add_command(
             label="ML processing…",
             command=self.open_ml_processing,
+        )
+        menu_bar.add_command(
+            label="Suggest corrections…",
+            command=self.suggest_recorded_corrections,
         )
         menu_bar.add_command(
             label="Preferences",
@@ -2187,6 +2216,8 @@ class EISApplication:
             "cpe_alpha": (0.5, 1.0),
         }
         self._ml_model_pipelines = copy.deepcopy(DEFAULT_ML_PIPELINES)
+        self._record_user_actions = False
+        self._correction_z_threshold = "4"
         self._auto_model_settings = {
             "criterion": "lml-bic",
             "max_num_peaks": 10,
@@ -2290,6 +2321,17 @@ class EISApplication:
             self._ml_model_pipelines = normalize_ml_pipelines(
                 payload.get("ml_model_pipelines"), defaults=self._ml_model_pipelines
             )
+            correction_memory = payload.get("correction_memory", {})
+            if isinstance(correction_memory, dict):
+                self._record_user_actions = bool(
+                    correction_memory.get("record_user_actions", False)
+                )
+                try:
+                    saved_z = float(correction_memory.get("bad_fit_z_threshold", "4"))
+                    if np.isfinite(saved_z) and saved_z > 0:
+                        self._correction_z_threshold = f"{saved_z:g}"
+                except (TypeError, ValueError):
+                    pass
             (
                 self._procedure_library_blocks,
                 self._procedure_library,
@@ -2347,7 +2389,13 @@ class EISApplication:
         explorer_new_columns_position: str,
         procedure_blocks: dict[str, list[dict[str, str]]] | None = None,
         procedures: dict[str, list[dict[str, object]]] | None = None,
+        correction_memory: dict | None = None,
     ) -> None:
+        if correction_memory is None:
+            correction_memory = {
+                "record_user_actions": self._record_user_actions,
+                "bad_fit_z_threshold": self._correction_z_threshold,
+            }
         self._preferences_path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self._preferences_path.with_suffix(".tmp")
         temporary.write_text(
@@ -2370,6 +2418,7 @@ class EISApplication:
                         "refine_max_iterations": self.refine_max_iterations_var.get(),
                     },
                     "auto_model": self._auto_model_settings,
+                    "correction_memory": correction_memory,
                     "ml_model_pipelines": {
                         name: copy.deepcopy(pipeline)
                         for name, pipeline in self._ml_model_pipelines.items()
@@ -3108,6 +3157,39 @@ class EISApplication:
         ml_model_box.bind("<<ComboboxSelected>>", show_ml_pipeline_editor)
         show_ml_pipeline_editor()
 
+        correction_frame = ttk.LabelFrame(
+            ml_tab, text="Correction memory (replay of your manual fixes)", padding=8
+        )
+        correction_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        correction_frame.columnconfigure(1, weight=1)
+        record_actions_var = tk.BooleanVar(value=self._record_user_actions)
+        ttk.Checkbutton(
+            correction_frame,
+            text="Record my correction steps to a sidecar next to the project "
+            "(<project>_user_actions.json)",
+            variable=record_actions_var,
+        ).grid(row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(
+            correction_frame,
+            text="Bad-fit parameter z threshold (Suggest corrections…)",
+        ).grid(row=1, column=0, sticky="w", pady=(6, 0))
+        correction_z_var = tk.StringVar(value=self._correction_z_threshold)
+        ttk.Entry(correction_frame, textvariable=correction_z_var, width=8).grid(
+            row=1, column=1, sticky="w", pady=(6, 0)
+        )
+        ttk.Label(
+            correction_frame,
+            text=(
+                "While recording is on, every parameter/model/point change you make is "
+                "logged per spectrum. \"Suggest corrections…\" (menu bar) then flags "
+                "spectra whose fitted parameters deviate from the smooth trend over "
+                "time/voltage/current/cycle and proposes the nearest logged fixes; "
+                "nothing is applied without your confirmation."
+            ),
+            wraplength=620,
+            justify=tk.LEFT,
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
         def add_circuit(_event=None) -> None:
             value = entry.get().strip()
             if value and value not in circuit_list.get(0, tk.END):
@@ -3191,6 +3273,9 @@ class EISApplication:
                     or fit_timeout_seconds <= 0
                 ):
                     raise ValueError("EEC fit time limit must be positive")
+                correction_z = float(correction_z_var.get())
+                if not np.isfinite(correction_z) or correction_z <= 0:
+                    raise ValueError("bad-fit parameter z threshold must be positive")
                 ml_pipelines = {}
                 for model_name, editor in ml_pipeline_editors.items():
                     try:
@@ -3207,6 +3292,8 @@ class EISApplication:
                 self._eec_parameter_bounds = parameter_bounds
                 self._fit_timeout_seconds = fit_timeout_seconds
                 self._ml_model_pipelines = ml_pipelines
+                self._record_user_actions = bool(record_actions_var.get())
+                self._correction_z_threshold = f"{correction_z:g}"
                 self.threshold_var.set(f"{bayes_drt2_threshold:g}")
                 self.deterministic_threshold_var.set(f"{deterministic_threshold:g}")
                 self.refine_z_threshold_var.set(f"{refine_z_threshold:g}")
@@ -3233,6 +3320,10 @@ class EISApplication:
                     new_columns_position_var.get().casefold(),
                     self.procedure_blocks,
                     self.procedures,
+                    {
+                        "record_user_actions": self._record_user_actions,
+                        "bad_fit_z_threshold": self._correction_z_threshold,
+                    },
                 )
             except (OSError, TypeError, ValueError) as error:
                 messagebox.showerror("Preferences save failed", str(error), parent=popup)
@@ -9038,6 +9129,430 @@ class EISApplication:
         actions, index, threshold, refine_z, refine_iterations, selected_rows = pending
         self.root.after(0, lambda: self._run_named_ml_pipeline_steps(actions, index, threshold, refine_z, refine_iterations, selected_rows))
         return True
+
+    def _correction_snapshot(self, dataset_id: str, loaded: LoadedProject, spectrum) -> SpectrumFitSnapshot:
+        cycle = self._loaded_cycle_for_popup(loaded, spectrum.cycle)
+        metadata = dict(cycle.custom_metadata)
+        metadata.update(spectrum.custom_metadata)
+        metadata.setdefault("potential_v", cycle.potential_v)
+        metadata.setdefault("current_ma", cycle.current_ma)
+        time_s = cycle.time_s if cycle.time_s is not None else spectrum.time_s
+        metadata.setdefault("time_s", time_s)
+        metadata.setdefault("Time", time_s)
+        metadata.setdefault("cycle", int(spectrum.cycle))
+        metadata.setdefault("Cycle mod 15", int(spectrum.cycle) % 15)
+        fit_ok = (
+            cycle.fit_parameters is not None
+            and cycle.fit_at_data_impedance is not None
+            and np.asarray(cycle.fit_parameters).size == len(cycle.parameters)
+        )
+        residual = relative_fit_residual(
+            cycle.frequency_hz,
+            cycle.impedance,
+            cycle.fit_at_data_impedance,
+            cycle.included,
+        )
+        return SpectrumFitSnapshot(
+            spectrum_id=spectrum_identifier(
+                cycle.frequency_hz,
+                cycle.impedance.real,
+                cycle.impedance.imag,
+                int(spectrum.cycle),
+                loaded.state.control,
+            ),
+            dataset_id=dataset_id,
+            dataset_label=loaded.dataset_label,
+            cycle=int(spectrum.cycle),
+            control=loaded.state.control,
+            circuit=cycle.model(loaded.state.circuit),
+            parameter_names=tuple(parameter.name for parameter in cycle.parameters),
+            fitted_parameters=(
+                tuple(float(value) for value in cycle.fit_parameters)
+                if fit_ok
+                else None
+            ),
+            fit_ok=bool(fit_ok),
+            residual=residual,
+            metadata=metadata,
+        )
+
+    def suggest_recorded_corrections(self) -> None:
+        """Flag badly fitted spectra and propose replayed logged corrections."""
+        if self.state is None or self.busy or not self._capture_controls():
+            return
+        if self.project_path is None:
+            self._update_status("load or save a project first")
+            return
+        log_path = user_actions_path_for(self.project_path)
+        try:
+            entries = load_user_actions(log_path)
+        except (OSError, ValueError) as error:
+            messagebox.showerror(
+                "Cannot read correction log",
+                f"{log_path}\n\n{type(error).__name__}: {error}",
+                parent=self.root,
+            )
+            return
+        if not correction_entries(entries):
+            messagebox.showinfo(
+                "No recorded corrections yet",
+                "Enable \"Record my correction steps\" in Preferences → ML pipelines, "
+                "correct a few badly fitted spectra, save, then run this again.\n\n"
+                f"The log would live at:\n{log_path}",
+                parent=self.root,
+            )
+            return
+        try:
+            z_threshold = float(self._correction_z_threshold)
+            if not np.isfinite(z_threshold) or z_threshold <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            messagebox.showerror(
+                "Invalid bad-fit z threshold",
+                "Set a positive value in Preferences → ML pipelines.",
+                parent=self.root,
+            )
+            return
+        selected_rows = self._selected_spectrum_rows()
+        if not selected_rows:
+            selected_rows = [
+                (self.current_dataset_id, self.loaded, spectrum)
+                for spectrum in self.loaded.spectra
+            ]
+        selected_keys = {
+            (dataset_id, int(spectrum.cycle))
+            for dataset_id, _loaded, spectrum in selected_rows
+        }
+        # Flag against the full context of the involved datasets so the
+        # neighbor statistics see the whole batch, not just the selection.
+        dataset_ids = sorted({dataset_id for dataset_id, _l, _s in selected_rows})
+        context_rows = [
+            (dataset_id, self.loaded_projects[dataset_id], spectrum)
+            for dataset_id in dataset_ids
+            for spectrum in self.loaded_projects[dataset_id].spectra
+        ]
+        context_snapshots = [
+            self._correction_snapshot(dataset_id, loaded, spectrum)
+            for dataset_id, loaded, spectrum in context_rows
+        ]
+        selected_snapshots = [
+            snapshot
+            for snapshot in context_snapshots
+            if (snapshot.dataset_id, snapshot.cycle) in selected_keys
+        ]
+        if not selected_snapshots:
+            self._update_status("no spectra to check")
+            return
+
+        # Drop similarity features that are unavailable for most spectra
+        # (e.g. no time column); the preferred list stays configurable.
+        features = effective_features(context_snapshots, DEFAULT_SIMILARITY_FEATURES)
+
+        def work():
+            flags = flag_bad_fits(
+                context_snapshots,
+                z_threshold=z_threshold,
+                feature_names=features,
+            )
+            selected_flags = [
+                flag
+                for flag in flags
+                if (flag.snapshot.dataset_id, flag.snapshot.cycle) in selected_keys
+            ]
+            proposals = propose_corrections(
+                selected_flags, entries, feature_names=features
+            )
+            return flags, selected_flags, proposals, features
+
+        self.status_var.set(
+            f"Checking {len(selected_snapshots)} spectra against "
+            f"{len(correction_entries(entries))} logged corrections…"
+        )
+        self._submit(
+            work,
+            self._finish_correction_suggestions,
+            "Correction suggestion failed",
+            operation_labels=[
+                f"{loaded.dataset_label}, cycle {spectrum.cycle}"
+                for _dataset_id, loaded, spectrum in selected_rows
+            ],
+            operation_name="Correction suggestions",
+        )
+
+    def _finish_correction_suggestions(self, result) -> None:
+        flags, selected_flags, proposals, features = result
+        self._last_correction_proposals = proposals
+        popup = tk.Toplevel(self.root)
+        popup.title("Suggested corrections from recorded fixes")
+        popup.transient(self.root)
+        popup.columnconfigure(0, weight=1)
+        popup.rowconfigure(1, weight=1)
+        ttk.Label(
+            popup,
+            text=(
+                f"{len(selected_flags)} of the selected spectra are flagged as badly fitted; "
+                f"{len(proposals)} have a replayable logged correction.\n"
+                f"Similarity features: {', '.join(features)}. "
+                "Select rows to apply, or leave the table unselected to use all proposals. "
+                "Nothing is applied until you confirm."
+            ),
+            padding=8,
+            wraplength=960,
+            justify="left",
+        ).grid(row=0, column=0, sticky="ew")
+        content = ttk.Frame(popup, padding=(8, 0, 8, 8))
+        content.grid(row=1, column=0, sticky="nsew")
+        content.columnconfigure(0, weight=1)
+        content.rowconfigure(0, weight=1)
+        table = ttk.Treeview(
+            content,
+            columns=(
+                "spectrum", "cycle", "voltage", "current", "time", "reasons",
+                "worst", "residual", "changes", "source",
+            ),
+            show="headings",
+            height=max(6, min(14, len(proposals))),
+        )
+        headings = {
+            "spectrum": "Spectrum",
+            "cycle": "Cycle",
+            "voltage": "Voltage (V)",
+            "current": "Current (mA)",
+            "time": "Time (s)",
+            "reasons": "Why flagged",
+            "worst": "Worst parameter (z)",
+            "residual": "Fit residual",
+            "changes": "Proposed changes",
+            "source": "Replayed from",
+        }
+        for column, heading in headings.items():
+            table.heading(column, text=heading)
+        table.column("spectrum", width=170, anchor="w")
+        table.column("cycle", width=55, anchor="e")
+        table.column("voltage", width=90, anchor="e")
+        table.column("current", width=95, anchor="e")
+        table.column("time", width=85, anchor="e")
+        table.column("reasons", width=130, anchor="w")
+        table.column("worst", width=150, anchor="w")
+        table.column("residual", width=85, anchor="e")
+        table.column("changes", width=240, anchor="w")
+        table.column("source", width=170, anchor="w")
+        proposal_by_item: dict[str, object] = {}
+        for index, proposal in enumerate(proposals):
+            snapshot = proposal.snapshot
+            metadata = snapshot.metadata
+            voltage = resolve_feature(metadata, snapshot.cycle, "voltage")
+            current = resolve_feature(metadata, snapshot.cycle, "current")
+            time_value = resolve_feature(metadata, snapshot.cycle, "time")
+            worst = proposal.flag.parameters[0] if proposal.flag.parameters else None
+            changes_text = ", ".join(
+                f"{change.get('name') or 'circuit'}.{change.get('field')}={change.get('new')!r}"
+                for change in proposal.changes[:4]
+            )
+            if len(proposal.changes) > 4:
+                changes_text += ", …"
+            source_text = ", ".join(
+                f"{source.get('dataset_label')}, cycle {source.get('cycle')}"
+                for source in proposal.sources
+            )
+            item = table.insert(
+                "",
+                "end",
+                values=(
+                    f"{snapshot.dataset_label}",
+                    snapshot.cycle,
+                    "—" if voltage is None else f"{voltage:.6g}",
+                    "—" if current is None else f"{current:.6g}",
+                    "—" if time_value is None else f"{time_value:.6g}",
+                    ", ".join(proposal.flag.reasons),
+                    "—" if worst is None else f"{worst.name} (z={worst.robust_z:.3g})",
+                    "—" if proposal.flag.residual is None else f"{proposal.flag.residual:.4g}",
+                    changes_text,
+                    source_text,
+                ),
+            )
+            proposal_by_item[item] = proposal
+        table.grid(row=0, column=0, sticky="nsew")
+        scrollbar = ttk.Scrollbar(content, orient="vertical", command=table.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        table.configure(yscrollcommand=scrollbar.set)
+        buttons = ttk.Frame(popup, padding=(8, 0, 8, 8))
+        buttons.grid(row=2, column=0, sticky="ew")
+
+        def chosen_proposals() -> list:
+            selection = table.selection()
+            if selection:
+                return [proposal_by_item[item] for item in selection]
+            return list(proposals)
+
+        def apply(and_fit: bool) -> None:
+            chosen = chosen_proposals()
+            if not chosen:
+                messagebox.showinfo(
+                    "No proposals",
+                    "No badly fitted spectra had a replayable logged correction.",
+                    parent=popup,
+                )
+                return
+            action = "apply the proposed corrections and refit" if and_fit else "apply the proposed corrections"
+            if not messagebox.askyesno(
+                "Apply suggested corrections",
+                f"{action.capitalize()} on {len(chosen)} spectrum"
+                f"{'s' if len(chosen) != 1 else ''}?\n\n"
+                "Every change is undoable (Ctrl+Z) and, while recording is on, "
+                "logged as a replayed correction.",
+                parent=popup,
+            ):
+                return
+            popup.destroy()
+            self._apply_correction_proposals(chosen, and_fit=and_fit)
+
+        ttk.Button(
+            buttons, text="Apply selected and refit", command=lambda: apply(True)
+        ).grid(row=0, column=0, padx=(0, 8))
+        ttk.Button(
+            buttons, text="Apply selected", command=lambda: apply(False)
+        ).grid(row=0, column=1, padx=(0, 8))
+        ttk.Button(buttons, text="Cancel", command=popup.destroy).grid(row=0, column=2)
+        if not proposals:
+            ttk.Label(
+                popup,
+                text="No proposals: either no selected spectrum was flagged, or no logged correction matches.",
+                padding=8,
+            ).grid(row=2, column=0, sticky="w")
+
+    def _apply_correction_proposals(self, proposals, *, and_fit: bool) -> None:
+        """Apply replayed parameter changes through the normal mutation paths."""
+        applied: list = []
+        skipped: list[str] = []
+        targets: list[SpectrumFitTarget] = []
+        if self._record_user_actions:
+            self._replay_in_progress = True
+        try:
+            for proposal in proposals:
+                snapshot = proposal.snapshot
+                loaded = self.loaded_projects.get(snapshot.dataset_id)
+                if loaded is None:
+                    skipped.append(snapshot.identity)
+                    continue
+                cycle = self._loaded_cycle_for_popup(loaded, snapshot.cycle)
+                parameters = loaded.state.parameters_for(snapshot.cycle)
+                by_name = {parameter.name: parameter for parameter in parameters}
+                changed = False
+                valid = True
+                for change in proposal.changes:
+                    field = str(change.get("field"))
+                    if field == "circuit":
+                        new_circuit = str(change.get("new") or "")
+                        if new_circuit and circuits_equivalent(cycle.model(loaded.state.circuit), new_circuit):
+                            cycle.circuit = new_circuit
+                            changed = True
+                        continue
+                    parameter = by_name.get(str(change.get("name")))
+                    if parameter is None or change.get("new") is None:
+                        continue
+                    if field == "initial":
+                        parameter.initial = float(change["new"])
+                    elif field == "lower":
+                        parameter.lower = float(change["new"])
+                    elif field == "upper":
+                        parameter.upper = float(change["new"])
+                    elif field == "fixed":
+                        parameter.fixed = bool(change["new"])
+                    else:
+                        continue
+                    changed = True
+                if not changed:
+                    skipped.append(snapshot.identity)
+                    continue
+                for parameter in parameters:
+                    if parameter.lower > parameter.upper:
+                        valid = False
+                        break
+                    if not parameter.lower <= parameter.initial <= parameter.upper:
+                        valid = False
+                        break
+                if not valid:
+                    skipped.append(snapshot.identity)
+                    continue
+                cycle.parameters = parameters
+                cycle.clear_fit()
+                loaded.state.cycles[cycle.cycle] = cycle
+                if self._record_user_actions:
+                    self._pending_replay_sources[snapshot.identity] = proposal.sources
+                applied.append(proposal)
+                if and_fit:
+                    targets.append(
+                        SpectrumFitTarget(
+                            loaded=loaded,
+                            cycle=cycle.cycle,
+                            label=f"{loaded.dataset_label}, cycle {cycle.cycle}",
+                        )
+                    )
+        finally:
+            if not self._record_user_actions:
+                self._replay_in_progress = False
+        if not applied:
+            self._update_status(
+                "no corrections applied"
+                + (f" (skipped: {', '.join(skipped)})" if skipped else "")
+            )
+            self._refresh_plot(rescale=True)
+            return
+        self._refresh_explorer_values()
+        self._refresh_plot(rescale=True)
+        self._schedule_history_checkpoint()
+        if not and_fit or not targets:
+            self._update_status(
+                f"replayed corrections applied to {len(applied)} spectra"
+                + (f" (skipped: {', '.join(skipped)})" if skipped else "")
+            )
+            return
+        try:
+            fit_options = self._fit_options_from_controls()
+        except (TypeError, ValueError) as error:
+            messagebox.showerror("Invalid optimizer settings", str(error), parent=self.root)
+            return
+        rows = [
+            (
+                proposal.snapshot.dataset_id,
+                self.loaded_projects[proposal.snapshot.dataset_id],
+                next(
+                    spectrum
+                    for spectrum in self.loaded_projects[
+                        proposal.snapshot.dataset_id
+                    ].spectra
+                    if spectrum.cycle == proposal.snapshot.cycle
+                ),
+            )
+            for proposal in applied
+        ]
+        self.status_var.set(
+            f"Refitting {len(targets)} spectra with replayed corrections…"
+        )
+        self._submit(
+            lambda: batch_fit_spectra(
+                targets,
+                self.state.parameters_for(self.state.active_cycle),
+                use_target_initial_parameters=True,
+                stop_event=self._stop_event,
+                fit_timeout_seconds=self._fit_timeout_seconds,
+                fit_options=fit_options,
+                progress_callback=self._report_batch_progress,
+            ),
+            lambda report: self._finish_correction_fit(report, rows),
+            "Replayed-correction fit failed",
+            operation_labels=[target.label for target in targets],
+            operation_name="Replayed-correction fit",
+        )
+
+    def _finish_correction_fit(self, report, rows) -> None:
+        self._finish_explorer_batch_fit(report)
+        if report.stopped or self._stop_event.is_set():
+            return
+        if self.analysis_mode_var.get() != "EEC":
+            return
+        self.refine_fit_selected(rows)
 
     def _start_runtime_ml_processing(self, operations: set[str], selected_rows, destination: Path) -> None:
         """Load the pretrained bundle and infer the selected open spectra."""
@@ -17887,13 +18402,120 @@ class EISApplication:
         if self._history_entry is not None:
             self._history_entry.label = label
             self.history.push(self._history_entry)
+        self._maybe_record_user_actions(self._history_payload, payload, label)
+        # A replay apply tags exactly the state change recorded above.
+        self._replay_in_progress = False
         self._history_payload = payload
         self._history_signature = signature
         self._history_entry = self._capture_history_entry("")
         self._update_history_menu()
 
+    def _maybe_record_user_actions(self, old_payload, new_payload, label: str) -> None:
+        """Append structured entries to the user-action sidecar when enabled.
+
+        Runs inside the undo-history checkpoint, so every state change the
+        checkpoint detects is logged exactly once.  Failures never break the
+        UI; recording is best-effort provenance.
+        """
+        if not self._record_user_actions or self.project_path is None:
+            return
+        try:
+            path = user_actions_path_for(self.project_path)
+            dataset_diffs = diff_state_payloads(old_payload, new_payload)
+            if not dataset_diffs:
+                return
+            applied_by = "replay" if self._replay_in_progress else "user"
+            entries = []
+            for dataset_diff in dataset_diffs:
+                dataset_id = str(dataset_diff.get("dataset_id"))
+                loaded = self.loaded_projects.get(dataset_id)
+                if loaded is None:
+                    continue
+                for cycle_change in dataset_diff.get("cycles", []):
+                    try:
+                        cycle_number = int(str(cycle_change.get("cycle")))
+                    except (TypeError, ValueError):
+                        continue
+                    cycle = self._loaded_cycle_for_popup(loaded, cycle_number)
+                    spectrum = next(
+                        (s for s in loaded.spectra if s.cycle == cycle_number), None
+                    )
+                    metadata = dict(cycle.custom_metadata)
+                    if spectrum is not None:
+                        metadata.update(spectrum.custom_metadata)
+                    metadata.setdefault("potential_v", cycle.potential_v)
+                    metadata.setdefault("current_ma", cycle.current_ma)
+                    time_s = cycle.time_s
+                    if time_s is None and spectrum is not None:
+                        time_s = spectrum.time_s
+                    metadata.setdefault("time_s", time_s)
+                    metadata.setdefault("Time", time_s)
+                    metadata.setdefault("cycle", cycle_number)
+                    metadata.setdefault("Cycle mod 15", cycle_number % 15)
+                    spectrum_id = spectrum_identifier(
+                        cycle.frequency_hz,
+                        cycle.impedance.real,
+                        cycle.impedance.imag,
+                        cycle_number,
+                        loaded.state.control,
+                    )
+                    residual_after = relative_fit_residual(
+                        cycle.frequency_hz,
+                        cycle.impedance,
+                        cycle.fit_at_data_impedance,
+                        cycle.included,
+                    )
+                    residual_before = None
+                    previous = self._history_entry
+                    if previous is not None:
+                        for prev_id, prev_loaded in previous.datasets:
+                            if prev_id != dataset_id:
+                                continue
+                            prev_cycle = prev_loaded.state.cycles.get(cycle_number)
+                            if prev_cycle is not None:
+                                residual_before = relative_fit_residual(
+                                    prev_cycle.frequency_hz,
+                                    prev_cycle.impedance,
+                                    prev_cycle.fit_at_data_impedance,
+                                    prev_cycle.included,
+                                )
+                            break
+                    identity = f"{dataset_id}::cycle-{cycle_number}"
+                    entry = make_action_entry(
+                        applied_by=applied_by,
+                        action=label,
+                        dataset_id=dataset_id,
+                        dataset_label=loaded.dataset_label,
+                        control=loaded.state.control,
+                        spectrum_id=spectrum_id,
+                        cycle=cycle_number,
+                        circuit=cycle.model(loaded.state.circuit),
+                        metadata=metadata,
+                        change=cycle_change,
+                        residual_before=residual_before,
+                        residual_after=residual_after,
+                    )
+                    replay_sources = self._pending_replay_sources.get(identity)
+                    if replay_sources is not None:
+                        entry["replay_sources"] = [dict(s) for s in replay_sources]
+                        del self._pending_replay_sources[identity]
+                    entries.append(entry)
+            if entries:
+                append_user_actions(
+                    path,
+                    entries,
+                    source_project=str(self.project_path),
+                    similarity_features=list(DEFAULT_SIMILARITY_FEATURES),
+                )
+        except (OSError, ValueError, TypeError, KeyError) as error:
+            logging.getLogger(__name__).warning(
+                "user action recording failed: %s", error
+            )
+
     def _baseline_history(self) -> None:
         self._history_suspended = True
+        self._replay_in_progress = False
+        self._pending_replay_sources.clear()
         try:
             self._history_payload = self._light_project_payload()
             self._history_signature = (
