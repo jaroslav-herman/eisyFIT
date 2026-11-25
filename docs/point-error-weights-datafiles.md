@@ -74,8 +74,11 @@ modulus column.
 
 1. **File → Import data…** (`Ctrl+I`), choose the file, set delimiter/skip
    rows and column mapping if needed.
-2. **Fit → Edit point weights…** → *Import errors from data file*.
-3. Choose the mode (modulus column, or Re(Z) + −Im(Z) columns), verify the
-   preselected column names, click **Load errors as weights**.
-4. Click **Apply**, then fit as usual. The status bar shows
+2. Optionally select several spectra in the explorer — the import then
+   applies to **all selected spectra** (each cycle reads its own rows).
+3. **Fit → Edit point weights…** → *Import errors from data file*. The
+   default mode is **Re(Z) and −Im(Z) error columns**; switch to
+   *Modulus |Z| error column* if your file has a single σ|Z| column.
+4. Verify the preselected column names, click **Load errors as weights**,
+   then **Apply**, and fit as usual. The status bar shows
    "custom weights on N points" and the fit diagnostics record the weighting.

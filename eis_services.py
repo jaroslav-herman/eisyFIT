@@ -1141,6 +1141,43 @@ def weights_from_point_errors(
     return weights
 
 
+def import_weights_from_errors(
+    dataframe,
+    cycle: int,
+    reference_frequency,
+    modulus_column: str | None = None,
+    real_column: str | None = None,
+    imaginary_column: str | None = None,
+) -> tuple[np.ndarray, int]:
+    """Compute per-point fit weights from error columns of one cycle.
+
+    Returns (weights, skipped) where skipped counts points whose error was
+    non-positive or non-finite; those points get weight 1.0.
+    """
+    if modulus_column:
+        sigma = cycle_aligned_column(
+            dataframe, cycle, modulus_column, reference_frequency=reference_frequency
+        )
+        weights = weights_from_point_errors(modulus_error=sigma)
+    elif real_column and imaginary_column:
+        if real_column == imaginary_column:
+            raise ValueError("The Re(Z) and -Im(Z) error columns must differ")
+        weights = weights_from_point_errors(
+            real_error=cycle_aligned_column(
+                dataframe, cycle, real_column, reference_frequency=reference_frequency
+            ),
+            imaginary_error=cycle_aligned_column(
+                dataframe, cycle, imaginary_column, reference_frequency=reference_frequency
+            ),
+        )
+    else:
+        raise ValueError(
+            "Provide either a modulus error column or both Re(Z) and -Im(Z) error columns"
+        )
+    skipped = int(np.count_nonzero(~np.isfinite(weights)))
+    return np.where(np.isfinite(weights), weights, 1.0), skipped
+
+
 def catalog_spectra(
     dataframe,
     cycles: list[int],

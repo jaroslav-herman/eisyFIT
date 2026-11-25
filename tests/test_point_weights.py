@@ -13,6 +13,7 @@ from eis_services import (
     cycle_aligned_column,
     error_column_candidates,
     fit_cycle,
+    import_weights_from_errors,
     load_cycle,
     weights_from_point_errors,
 )
@@ -291,6 +292,55 @@ class ErrorImportTests(unittest.TestCase):
             )
         with self.assertRaises(KeyError):
             cycle_aligned_column(dataframe, 1, "missing column")
+
+    def test_import_weights_from_errors_per_cycle(self):
+        freq1 = np.array([100.0, 10.0, 1.0])
+        freq2 = np.array([50.0, 5.0])
+        dataframe = pd.DataFrame(
+            {
+                "freq_hz": np.concatenate([freq1, freq2]),
+                "re_zwe_ce_ohm": np.arange(5, dtype=float),
+                "minus_im_zwe_ce_ohm": np.arange(5, dtype=float) * 0.1,
+                "ewe_ece_v": np.ones(5),
+                "i_ma": np.ones(5),
+                "cycle_number": [1, 1, 1, 2, 2],
+                "err |Z|/Ohm": [0.1, 0.0, 0.5, 0.2, 0.4],
+                "err Re(Z)/Ohm": [0.3, 0.3, 0.3, 0.1, 0.1],
+                "err -Im(Z)/Ohm": [0.4, 0.4, 0.4, 0.2, 0.2],
+            }
+        )
+        cycle1 = load_cycle(dataframe, 1, "cell")
+        cycle2 = load_cycle(dataframe, 2, "cell")
+        weights1, skipped1 = import_weights_from_errors(
+            dataframe, 1, cycle1.frequency_hz, modulus_column="err |Z|/Ohm"
+        )
+        # cycle 1 sorted by descending frequency (100, 10, 1): sigma 0.1, 0.0, 0.5
+        np.testing.assert_allclose(weights1[[0, 2]], [10.0, 2.0])
+        self.assertEqual(weights1[1], 1.0)  # zero error -> weight 1.0
+        self.assertEqual(skipped1, 1)
+        weights2, skipped2 = import_weights_from_errors(
+            dataframe, 2, cycle2.frequency_hz, modulus_column="err |Z|/Ohm"
+        )
+        np.testing.assert_allclose(weights2, [5.0, 2.5])
+        self.assertEqual(skipped2, 0)
+        weights_re_im, _ = import_weights_from_errors(
+            dataframe,
+            1,
+            cycle1.frequency_hz,
+            real_column="err Re(Z)/Ohm",
+            imaginary_column="err -Im(Z)/Ohm",
+        )
+        np.testing.assert_allclose(weights_re_im, 1.0 / 0.5)
+        with self.assertRaises(ValueError):
+            import_weights_from_errors(
+                dataframe,
+                1,
+                cycle1.frequency_hz,
+                real_column="err Re(Z)/Ohm",
+                imaginary_column="err Re(Z)/Ohm",
+            )
+        with self.assertRaises(ValueError):
+            import_weights_from_errors(dataframe, 1, cycle1.frequency_hz)
 
     def test_imported_error_weights_flow_into_fit(self):
         frequency = np.logspace(5, -2, 60)

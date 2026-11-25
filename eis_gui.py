@@ -106,11 +106,10 @@ from eis_services import (
     load_project,
     load_projects,
     select_eec_model_from_hybrid_drt,
-    cycle_aligned_column,
     detect_eec_parameter_anomalies,
     error_column_candidates,
+    import_weights_from_errors,
     suggest_eec_parameters,
-    weights_from_point_errors,
 )
 from load_and_label_eis import find_pattern_length
 from ml.gui_results import MLResult, load_ml_results, load_ml_results_payload, suggested_eec
@@ -1282,7 +1281,16 @@ class PointWeightsDialog(tk.Toplevel):
     1 = neutral). Weights of excluded points have no effect on the fit.
     """
 
-    def __init__(self, parent, cycle, on_apply, columns=(), column_values=None) -> None:
+    def __init__(
+        self,
+        parent,
+        cycle,
+        on_apply,
+        columns=(),
+        targets=(),
+        active_key=None,
+        on_import=None,
+    ) -> None:
         super().__init__(parent)
         self.title(f"Point weights · cycle {cycle.cycle}")
         self.geometry("600x560")
@@ -1292,7 +1300,10 @@ class PointWeightsDialog(tk.Toplevel):
         self._cycle = cycle
         self._on_apply = on_apply
         self._columns = [str(column) for column in columns]
-        self._column_values = column_values
+        self._targets = list(targets)
+        self._active_key = active_key
+        self._on_import = on_import
+        self._imported: dict[object, np.ndarray] = {}
         self._pending: dict[int, float] = {}
         self._editor: ttk.Entry | None = None
 
@@ -1315,7 +1326,7 @@ class PointWeightsDialog(tk.Toplevel):
             justify=tk.LEFT,
         ).grid(row=0, column=0, sticky="w", pady=(0, 8))
 
-        if self._column_values is not None:
+        if self._targets:
             self._build_import_frame(body)
 
         table_frame = ttk.Frame(body)
@@ -1382,22 +1393,38 @@ class PointWeightsDialog(tk.Toplevel):
     def _build_import_frame(self, body) -> None:
         frame = ttk.LabelFrame(body, text="Import errors from data file", padding=8)
         frame.grid(row=1, column=0, sticky="ew", pady=(0, 8))
-        self._import_mode = tk.StringVar(value="modulus")
+        target_note = (
+            f"Applies to {len(self._targets)} selected spectrum"
+            + ("" if len(self._targets) == 1 else "s")
+            + "."
+            if len(self._targets) > 1
+            else ""
+        )
+        row = 0
+        if target_note:
+            ttk.Label(frame, text=target_note, foreground="#555555").grid(
+                row=row, column=0, columnspan=3, sticky="w"
+            )
+            row += 1
+        self._import_mode = tk.StringVar(value="re_im")
         ttk.Radiobutton(
             frame,
             text="Modulus |Z| error column",
             variable=self._import_mode,
             value="modulus",
-        ).grid(row=0, column=0, columnspan=3, sticky="w")
+        ).grid(row=row, column=0, columnspan=3, sticky="w")
+        row += 1
         ttk.Radiobutton(
             frame,
             text="Re(Z) and -Im(Z) error columns",
             variable=self._import_mode,
             value="re_im",
-        ).grid(row=1, column=0, columnspan=3, sticky="w")
+        ).grid(row=row, column=0, columnspan=3, sticky="w")
+        row += 1
         ttk.Label(
             frame, text="weights w = 1/σ  (Re+Im: σ = √(σRe² + σIm²))"
-        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(2, 6))
+        ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(2, 6))
+        row += 1
 
         candidates = self._columns
 
@@ -1408,79 +1435,84 @@ class PointWeightsDialog(tk.Toplevel):
                     return column
             return ""
 
-        ttk.Label(frame, text="|Z| error column").grid(row=3, column=0, sticky="w")
+        ttk.Label(frame, text="|Z| error column").grid(row=row, column=0, sticky="w")
         self._modulus_column = ttk.Combobox(
             frame, values=candidates, state="readonly", width=28
         )
         self._modulus_column.set(pick(("err", "|z|")) or pick(("|z|",)) or pick(("err",)))
-        self._modulus_column.grid(row=3, column=1, sticky="ew", padx=(6, 0))
+        self._modulus_column.grid(row=row, column=1, sticky="ew", padx=(6, 0))
+        row += 1
 
-        ttk.Label(frame, text="Re(Z) error column").grid(row=4, column=0, sticky="w")
+        ttk.Label(frame, text="Re(Z) error column").grid(row=row, column=0, sticky="w")
         self._real_column = ttk.Combobox(
             frame, values=candidates, state="readonly", width=28
         )
         self._real_column.set(pick(("err", "re(z")) or pick(("re(z",)))
-        self._real_column.grid(row=4, column=1, sticky="ew", padx=(6, 0))
+        self._real_column.grid(row=row, column=1, sticky="ew", padx=(6, 0))
+        row += 1
 
-        ttk.Label(frame, text="-Im(Z) error column").grid(row=5, column=0, sticky="w")
+        ttk.Label(frame, text="-Im(Z) error column").grid(row=row, column=0, sticky="w")
         self._imag_column = ttk.Combobox(
             frame, values=candidates, state="readonly", width=28
         )
         self._imag_column.set(
             pick(("err", "-im(z")) or pick(("err", "im(z")) or pick(("im(z",))
         )
-        self._imag_column.grid(row=5, column=1, sticky="ew", padx=(6, 0))
+        self._imag_column.grid(row=row, column=1, sticky="ew", padx=(6, 0))
 
         ttk.Button(
             frame, text="Load errors as weights", command=self._import_errors
-        ).grid(row=3, column=2, rowspan=3, sticky="n", padx=(12, 0))
+        ).grid(row=row - 2, column=2, rowspan=3, sticky="n", padx=(12, 0))
         frame.columnconfigure(1, weight=1)
 
     def _import_errors(self) -> None:
-        if self._column_values is None:
+        if not self._targets:
             return
+        modulus_column = real_column = imag_column = None
         try:
             if self._import_mode.get() == "modulus":
-                column = self._modulus_column.get()
-                if not column:
+                modulus_column = self._modulus_column.get()
+                if not modulus_column:
                     raise ValueError("Choose a modulus |Z| error column first")
-                weights = weights_from_point_errors(
-                    modulus_error=self._column_values(column)
-                )
             else:
                 real_column = self._real_column.get()
                 imag_column = self._imag_column.get()
                 if not real_column or not imag_column:
                     raise ValueError("Choose both Re(Z) and -Im(Z) error columns first")
-                if real_column == imag_column:
-                    raise ValueError("The Re(Z) and -Im(Z) error columns must differ")
-                weights = weights_from_point_errors(
-                    real_error=self._column_values(real_column),
-                    imaginary_error=self._column_values(imag_column),
+            imported: dict[object, np.ndarray] = {}
+            total_skipped = 0
+            for target in self._targets:
+                weights, skipped = target["import"](
+                    modulus_column=modulus_column,
+                    real_column=real_column,
+                    imaginary_column=imag_column,
                 )
+                imported[target["key"]] = weights
+                total_skipped += skipped
         except (KeyError, ValueError) as error:
             messagebox.showerror("Cannot import errors", str(error), parent=self)
             return
-        if weights.size != self._cycle.frequency_hz.size:
-            messagebox.showerror(
-                "Cannot import errors",
-                f"The selected column has {weights.size} values for this cycle, "
-                f"but the spectrum has {self._cycle.frequency_hz.size} points.",
-                parent=self,
-            )
-            return
-        skipped = int(np.count_nonzero(~np.isfinite(weights)))
-        weights = np.where(np.isfinite(weights), weights, 1.0)
-        self._pending = {index: float(weight) for index, weight in enumerate(weights)}
-        for index, weight in self._pending.items():
-            self._set_cell_weight(index, weight)
-        if skipped:
-            messagebox.showinfo(
-                "Imported weights",
-                f"{skipped} points had non-positive or non-finite error values "
-                "and keep weight 1.0.",
-                parent=self,
-            )
+        self._imported = imported
+        # Reflect the active spectrum's imported weights in the visible table;
+        # manual cell edits (self._pending) still override them on Apply.
+        if self._active_key in imported:
+            weights = imported[self._active_key]
+            if weights.size == self._cycle.frequency_hz.size:
+                for index, weight in enumerate(weights):
+                    if index not in self._pending:
+                        self._set_cell_weight(index, float(weight))
+        messagebox.showinfo(
+            "Imported weights",
+            f"Loaded weights for {len(imported)} spectrum"
+            f"{'s' if len(imported) != 1 else ''}."
+            + (
+                f" {total_skipped} points had non-positive or non-finite error "
+                "values and keep weight 1.0."
+                if total_skipped
+                else ""
+            ),
+            parent=self,
+        )
 
     def _set_cell_weight(self, index: int, weight: float) -> None:
         self.table.set(str(index), "weight", f"{weight:.6g}")
@@ -1554,6 +1586,10 @@ class PointWeightsDialog(tk.Toplevel):
 
     def _accept(self) -> None:
         self._commit_edit()
+        if self._on_import is not None and self._imported:
+            # Imported weights go to every selected spectrum first; the manual
+            # edits below are then merged on top for the active spectrum.
+            self._on_import(self._imported)
         values = np.array(self._cycle.weights, copy=True)
         for index, weight in self._pending.items():
             values[index] = weight
@@ -12776,20 +12812,55 @@ class EISApplication:
         if self.busy or self.state is None:
             return
         cycle = self.state.active
+        active_key = (self.current_dataset_id, self.state.active_cycle)
         loaded = self.loaded
-        columns: list[str] = []
-        column_values = None
-        if loaded is not None:
-            columns = error_column_candidates(list(loaded.dataframe.columns))
-            cycle_number = self.state.active_cycle
+        columns: list[str] = (
+            error_column_candidates(list(loaded.dataframe.columns))
+            if loaded is not None
+            else []
+        )
 
-            def column_values(name, _loaded=loaded, _cycle=cycle_number):
-                return cycle_aligned_column(
-                    _loaded.dataframe,
-                    _cycle,
-                    name,
-                    reference_frequency=cycle.frequency_hz,
+        def make_target(dataset_id, target_loaded, cycle_number) -> dict:
+            target_cycle = target_loaded.state.cycles.get(cycle_number)
+            if target_cycle is None:
+                target_cycle = load_cycle(
+                    target_loaded.dataframe, cycle_number, target_loaded.state.control
                 )
+                target_loaded.state.cycles[cycle_number] = target_cycle
+
+            def import_errors(
+                _loaded=target_loaded,
+                _cycle_number=cycle_number,
+                _cycle_state=target_cycle,
+                modulus_column=None,
+                real_column=None,
+                imaginary_column=None,
+            ):
+                return import_weights_from_errors(
+                    _loaded.dataframe,
+                    _cycle_number,
+                    _cycle_state.frequency_hz,
+                    modulus_column=modulus_column,
+                    real_column=real_column,
+                    imaginary_column=imaginary_column,
+                )
+
+            return {
+                "key": (dataset_id, cycle_number),
+                "label": f"{target_loaded.dataset_label} · cycle {cycle_number}",
+                "import": import_errors,
+            }
+
+        selected = self._selected_spectrum_rows()
+        targets: list[dict] = []
+        seen: set[tuple[str, int]] = set()
+        for dataset_id, target_loaded, spectrum in selected:
+            if (dataset_id, spectrum.cycle) in seen:
+                continue
+            seen.add((dataset_id, spectrum.cycle))
+            targets.append(make_target(dataset_id, target_loaded, spectrum.cycle))
+        if not targets and loaded is not None:
+            targets.append(make_target(active_key[0], loaded, active_key[1]))
 
         def apply_weights(values: np.ndarray) -> None:
             try:
@@ -12803,8 +12874,37 @@ class EISApplication:
             self._update_status("point weights updated")
             self._fit_after_point_edit()
 
+        def apply_imported(imported: dict) -> None:
+            applied = 0
+            for (dataset_id, cycle_number), weights in imported.items():
+                target_loaded = self.loaded_projects.get(dataset_id)
+                if target_loaded is None:
+                    continue
+                target_cycle = target_loaded.state.cycles.get(cycle_number)
+                if target_cycle is None:
+                    continue
+                try:
+                    target_cycle.set_point_weights(weights)
+                    applied += 1
+                except ValueError as error:
+                    messagebox.showerror(
+                        "Invalid point weights",
+                        f"Cycle {cycle_number}: {error}",
+                        parent=self.root,
+                    )
+            if applied:
+                self._refresh_plot(rescale=False)
+                self._update_status(f"imported point weights for {applied} spectra")
+                self._fit_after_point_edit()
+
         PointWeightsDialog(
-            self.root, cycle, apply_weights, columns=columns, column_values=column_values
+            self.root,
+            cycle,
+            apply_weights,
+            columns=columns,
+            targets=targets,
+            active_key=active_key,
+            on_import=apply_imported if targets else None,
         )
 
     def toggle_point_edit_mode(self, _event=None) -> str | None:
