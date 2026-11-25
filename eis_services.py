@@ -1071,6 +1071,76 @@ def load_cycle(dataframe, cycle: int, control: str) -> CycleState:
     )
 
 
+def cycle_aligned_column(
+    dataframe,
+    cycle: int,
+    column: str,
+    reference_frequency=None,
+) -> np.ndarray:
+    """Return a dataframe column restricted to one cycle, in CycleState point order.
+
+    `load_cycle` sorts points by descending frequency, so the same ordering is
+    applied here to keep imported per-point values aligned with
+    `CycleState.frequency_hz` / `impedance` / `weights`. When
+    `reference_frequency` is given, the file rows are verified against it.
+    """
+    if column not in dataframe.columns:
+        raise KeyError(f"The data file has no column {column!r}")
+    rows = dataframe["freq_hz"] != 0
+    if "cycle_number" in dataframe.columns:
+        rows &= dataframe["cycle_number"] == cycle
+    frequency = np.asarray(dataframe.loc[rows, "freq_hz"], dtype=float)
+    values = np.asarray(dataframe.loc[rows, column], dtype=float)
+    order = spectrum_sort_order(frequency)
+    sorted_frequency = frequency[order]
+    if reference_frequency is not None and not np.allclose(
+        sorted_frequency, np.asarray(reference_frequency, dtype=float).reshape(-1)
+    ):
+        raise ValueError("The data file rows no longer match the loaded spectrum points")
+    return values[order]
+
+
+def error_column_candidates(columns) -> list[str]:
+    """Column names that look like per-point error estimates, listed first."""
+    columns = [str(column) for column in columns]
+    lowered = [column.lower() for column in columns]
+    errorish = [
+        column
+        for column, low in zip(columns, lowered)
+        if "err" in low or low.startswith(("σ", "sigma"))
+    ]
+    rest = [column for column, low in zip(columns, lowered) if column not in errorish]
+    return errorish + rest
+
+
+def weights_from_point_errors(
+    modulus_error=None,
+    real_error=None,
+    imaginary_error=None,
+) -> np.ndarray:
+    """Convert per-point error estimates (sigma) into EEC fit weights w = 1/sigma.
+
+    With separate real and imaginary errors the combined sigma is
+    hypot(sigma_real, sigma_imag). Non-positive or non-finite errors produce
+    np.nan so the caller can decide how to report them.
+    """
+    if modulus_error is not None:
+        sigma = np.asarray(modulus_error, dtype=float).reshape(-1)
+    elif real_error is not None and imaginary_error is not None:
+        sigma = np.hypot(
+            np.asarray(real_error, dtype=float).reshape(-1),
+            np.asarray(imaginary_error, dtype=float).reshape(-1),
+        )
+    else:
+        raise ValueError(
+            "Provide either a modulus error column or both Re(Z) and -Im(Z) error columns"
+        )
+    with np.errstate(divide="ignore", invalid="ignore"):
+        weights = 1.0 / sigma
+    weights[~np.isfinite(weights) | (weights <= 0.0)] = np.nan
+    return weights
+
+
 def catalog_spectra(
     dataframe,
     cycles: list[int],

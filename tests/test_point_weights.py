@@ -8,7 +8,14 @@ from scipy.optimize import least_squares
 
 from eis_model import CycleState, ParameterValue, ProjectState, copy_cycle_state
 from eis_project import load_json_payload, load_project_file, save_project_file
-from eis_services import FitOptions, fit_cycle
+from eis_services import (
+    FitOptions,
+    cycle_aligned_column,
+    error_column_candidates,
+    fit_cycle,
+    load_cycle,
+    weights_from_point_errors,
+)
 from impedance.models.circuits import CustomCircuit
 from spectrum_simulator import simulate_spectrum
 
@@ -218,6 +225,87 @@ class WeightedFitTests(unittest.TestCase):
         cycle.set_point_weights(np.full(cycle.frequency_hz.size, 2.0))
         result = fit_cycle(cycle, CIRCUIT, parameters, FitOptions())
         self.assertTrue(np.all(np.isfinite(result.fitted_parameters)))
+
+
+class ErrorImportTests(unittest.TestCase):
+    def test_weights_from_modulus_error(self):
+        sigma = np.array([0.1, 0.5, 2.0])
+        np.testing.assert_allclose(
+            weights_from_point_errors(modulus_error=sigma), 1.0 / sigma
+        )
+
+    def test_weights_from_real_and_imaginary_errors(self):
+        sigma_re = np.array([0.3, 0.0])
+        sigma_im = np.array([0.4, 1.0])
+        weights = weights_from_point_errors(real_error=sigma_re, imaginary_error=sigma_im)
+        np.testing.assert_allclose(weights[0], 1.0 / 0.5)
+        np.testing.assert_allclose(weights[1], 1.0)
+
+    def test_invalid_errors_become_nan(self):
+        weights = weights_from_point_errors(modulus_error=np.array([0.5, 0.0, -1.0, np.nan]))
+        self.assertTrue(np.isfinite(weights[0]))
+        self.assertTrue(np.all(~np.isfinite(weights[1:])))
+        with self.assertRaises(ValueError):
+            weights_from_point_errors()
+        with self.assertRaises(ValueError):
+            weights_from_point_errors(real_error=np.array([1.0]))
+
+    def test_error_column_candidates_put_error_columns_first(self):
+        columns = ["freq/Hz", "Re(Z)/Ohm", "err |Z|/Ohm", "sigma Re(Z)", "-Im(Z)/Ohm"]
+        candidates = error_column_candidates(columns)
+        self.assertEqual(candidates[:2], ["err |Z|/Ohm", "sigma Re(Z)"])
+        self.assertEqual(sorted(candidates[2:]), sorted(columns[:1] + columns[1:2] + columns[4:]))
+
+    def test_cycle_aligned_column_matches_load_cycle_order(self):
+        rng = np.random.default_rng(11)
+        frequency = rng.permutation(np.logspace(4, -1, 25))
+        dataframe = pd.DataFrame(
+            {
+                "freq_hz": np.concatenate([frequency, np.logspace(3, 0, 10)]),
+                "re_zwe_ce_ohm": np.arange(35, dtype=float),
+                "minus_im_zwe_ce_ohm": np.arange(35, dtype=float) * 0.1,
+                "ewe_ece_v": np.ones(35),
+                "i_ma": np.ones(35),
+                "cycle_number": [1] * 25 + [2] * 10,
+                "err |Z|/Ohm": np.arange(35, dtype=float) + 1.0,
+            }
+        )
+        cycle = load_cycle(dataframe, 1, "cell")
+        errors = cycle_aligned_column(dataframe, 1, "err |Z|/Ohm")
+        self.assertEqual(errors.size, cycle.frequency_hz.size)
+        rows = dataframe["cycle_number"] == 1
+        expected = dataframe.loc[rows, "err |Z|/Ohm"].to_numpy()[
+            np.argsort(dataframe.loc[rows, "freq_hz"].to_numpy())[::-1]
+        ]
+        np.testing.assert_array_equal(errors, expected)
+        # reference_frequency must match the loaded spectrum
+        np.testing.assert_array_equal(
+            cycle_aligned_column(
+                dataframe, 1, "err |Z|/Ohm", reference_frequency=cycle.frequency_hz
+            ),
+            errors,
+        )
+        with self.assertRaises(ValueError):
+            cycle_aligned_column(
+                dataframe, 1, "err |Z|/Ohm", reference_frequency=cycle.frequency_hz[::-1]
+            )
+        with self.assertRaises(KeyError):
+            cycle_aligned_column(dataframe, 1, "missing column")
+
+    def test_imported_error_weights_flow_into_fit(self):
+        frequency = np.logspace(5, -2, 60)
+        impedance = simulate_spectrum(CIRCUIT, frequency, TRUE_VALUES).impedance
+        sigma = np.linspace(0.001, 0.01, frequency.size)
+        cycle, parameters = _cycle(frequency=frequency, impedance=impedance)
+        cycle.set_point_weights(weights_from_point_errors(modulus_error=sigma))
+        result = fit_cycle(
+            cycle,
+            CIRCUIT,
+            parameters,
+            FitOptions(pipeline=("least_squares", "least_squares")),
+        )
+        manual = _manual_weighted_fit(frequency, impedance, 1.0 / sigma)
+        np.testing.assert_allclose(result.fitted_parameters, manual, rtol=1e-5, atol=1e-9)
 
 
 class WeightPersistenceTests(unittest.TestCase):

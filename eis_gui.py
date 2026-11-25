@@ -106,8 +106,11 @@ from eis_services import (
     load_project,
     load_projects,
     select_eec_model_from_hybrid_drt,
+    cycle_aligned_column,
     detect_eec_parameter_anomalies,
+    error_column_candidates,
     suggest_eec_parameters,
+    weights_from_point_errors,
 )
 from load_and_label_eis import find_pattern_length
 from ml.gui_results import MLResult, load_ml_results, load_ml_results_payload, suggested_eec
@@ -1279,22 +1282,24 @@ class PointWeightsDialog(tk.Toplevel):
     1 = neutral). Weights of excluded points have no effect on the fit.
     """
 
-    def __init__(self, parent, cycle, on_apply) -> None:
+    def __init__(self, parent, cycle, on_apply, columns=(), column_values=None) -> None:
         super().__init__(parent)
         self.title(f"Point weights · cycle {cycle.cycle}")
-        self.geometry("600x520")
-        self.minsize(500, 340)
+        self.geometry("600x560")
+        self.minsize(500, 420)
         self.transient(parent)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
         self._cycle = cycle
         self._on_apply = on_apply
+        self._columns = [str(column) for column in columns]
+        self._column_values = column_values
         self._pending: dict[int, float] = {}
         self._editor: ttk.Entry | None = None
 
         body = ttk.Frame(self, padding=12)
         body.pack(fill=tk.BOTH, expand=True)
         body.columnconfigure(0, weight=1)
-        body.rowconfigure(1, weight=1)
+        body.rowconfigure(2, weight=1)
 
         custom = int(np.count_nonzero(cycle.weights != 1.0))
         ttk.Label(
@@ -1310,8 +1315,11 @@ class PointWeightsDialog(tk.Toplevel):
             justify=tk.LEFT,
         ).grid(row=0, column=0, sticky="w", pady=(0, 8))
 
+        if self._column_values is not None:
+            self._build_import_frame(body)
+
         table_frame = ttk.Frame(body)
-        table_frame.grid(row=1, column=0, sticky="nsew")
+        table_frame.grid(row=2, column=0, sticky="nsew")
         table_frame.columnconfigure(0, weight=1)
         table_frame.rowconfigure(0, weight=1)
         columns = ("index", "frequency", "modulus", "included", "weight")
@@ -1357,7 +1365,7 @@ class PointWeightsDialog(tk.Toplevel):
         self.table.bind("<Double-1>", self._begin_edit)
 
         buttons = ttk.Frame(body)
-        buttons.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        buttons.grid(row=3, column=0, sticky="ew", pady=(10, 0))
         ttk.Button(buttons, text="All 1.0", command=self._set_all_one).pack(
             side=tk.LEFT
         )
@@ -1370,6 +1378,109 @@ class PointWeightsDialog(tk.Toplevel):
         ttk.Button(buttons, text="Apply", command=self._accept).pack(side=tk.RIGHT)
 
         self.grab_set()
+
+    def _build_import_frame(self, body) -> None:
+        frame = ttk.LabelFrame(body, text="Import errors from data file", padding=8)
+        frame.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        self._import_mode = tk.StringVar(value="modulus")
+        ttk.Radiobutton(
+            frame,
+            text="Modulus |Z| error column",
+            variable=self._import_mode,
+            value="modulus",
+        ).grid(row=0, column=0, columnspan=3, sticky="w")
+        ttk.Radiobutton(
+            frame,
+            text="Re(Z) and -Im(Z) error columns",
+            variable=self._import_mode,
+            value="re_im",
+        ).grid(row=1, column=0, columnspan=3, sticky="w")
+        ttk.Label(
+            frame, text="weights w = 1/σ  (Re+Im: σ = √(σRe² + σIm²))"
+        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(2, 6))
+
+        candidates = self._columns
+
+        def pick(keywords, exclude=()):
+            for column in candidates:
+                low = column.lower()
+                if all(keyword in low for keyword in keywords) and column not in exclude:
+                    return column
+            return ""
+
+        ttk.Label(frame, text="|Z| error column").grid(row=3, column=0, sticky="w")
+        self._modulus_column = ttk.Combobox(
+            frame, values=candidates, state="readonly", width=28
+        )
+        self._modulus_column.set(pick(("err", "|z|")) or pick(("|z|",)) or pick(("err",)))
+        self._modulus_column.grid(row=3, column=1, sticky="ew", padx=(6, 0))
+
+        ttk.Label(frame, text="Re(Z) error column").grid(row=4, column=0, sticky="w")
+        self._real_column = ttk.Combobox(
+            frame, values=candidates, state="readonly", width=28
+        )
+        self._real_column.set(pick(("err", "re(z")) or pick(("re(z",)))
+        self._real_column.grid(row=4, column=1, sticky="ew", padx=(6, 0))
+
+        ttk.Label(frame, text="-Im(Z) error column").grid(row=5, column=0, sticky="w")
+        self._imag_column = ttk.Combobox(
+            frame, values=candidates, state="readonly", width=28
+        )
+        self._imag_column.set(
+            pick(("err", "-im(z")) or pick(("err", "im(z")) or pick(("im(z",))
+        )
+        self._imag_column.grid(row=5, column=1, sticky="ew", padx=(6, 0))
+
+        ttk.Button(
+            frame, text="Load errors as weights", command=self._import_errors
+        ).grid(row=3, column=2, rowspan=3, sticky="n", padx=(12, 0))
+        frame.columnconfigure(1, weight=1)
+
+    def _import_errors(self) -> None:
+        if self._column_values is None:
+            return
+        try:
+            if self._import_mode.get() == "modulus":
+                column = self._modulus_column.get()
+                if not column:
+                    raise ValueError("Choose a modulus |Z| error column first")
+                weights = weights_from_point_errors(
+                    modulus_error=self._column_values(column)
+                )
+            else:
+                real_column = self._real_column.get()
+                imag_column = self._imag_column.get()
+                if not real_column or not imag_column:
+                    raise ValueError("Choose both Re(Z) and -Im(Z) error columns first")
+                if real_column == imag_column:
+                    raise ValueError("The Re(Z) and -Im(Z) error columns must differ")
+                weights = weights_from_point_errors(
+                    real_error=self._column_values(real_column),
+                    imaginary_error=self._column_values(imag_column),
+                )
+        except (KeyError, ValueError) as error:
+            messagebox.showerror("Cannot import errors", str(error), parent=self)
+            return
+        if weights.size != self._cycle.frequency_hz.size:
+            messagebox.showerror(
+                "Cannot import errors",
+                f"The selected column has {weights.size} values for this cycle, "
+                f"but the spectrum has {self._cycle.frequency_hz.size} points.",
+                parent=self,
+            )
+            return
+        skipped = int(np.count_nonzero(~np.isfinite(weights)))
+        weights = np.where(np.isfinite(weights), weights, 1.0)
+        self._pending = {index: float(weight) for index, weight in enumerate(weights)}
+        for index, weight in self._pending.items():
+            self._set_cell_weight(index, weight)
+        if skipped:
+            messagebox.showinfo(
+                "Imported weights",
+                f"{skipped} points had non-positive or non-finite error values "
+                "and keep weight 1.0.",
+                parent=self,
+            )
 
     def _set_cell_weight(self, index: int, weight: float) -> None:
         self.table.set(str(index), "weight", f"{weight:.6g}")
@@ -12665,6 +12776,20 @@ class EISApplication:
         if self.busy or self.state is None:
             return
         cycle = self.state.active
+        loaded = self.loaded
+        columns: list[str] = []
+        column_values = None
+        if loaded is not None:
+            columns = error_column_candidates(list(loaded.dataframe.columns))
+            cycle_number = self.state.active_cycle
+
+            def column_values(name, _loaded=loaded, _cycle=cycle_number):
+                return cycle_aligned_column(
+                    _loaded.dataframe,
+                    _cycle,
+                    name,
+                    reference_frequency=cycle.frequency_hz,
+                )
 
         def apply_weights(values: np.ndarray) -> None:
             try:
@@ -12678,7 +12803,9 @@ class EISApplication:
             self._update_status("point weights updated")
             self._fit_after_point_edit()
 
-        PointWeightsDialog(self.root, cycle, apply_weights)
+        PointWeightsDialog(
+            self.root, cycle, apply_weights, columns=columns, column_values=column_values
+        )
 
     def toggle_point_edit_mode(self, _event=None) -> str | None:
         self.point_toggle_mode = not self.point_toggle_mode
