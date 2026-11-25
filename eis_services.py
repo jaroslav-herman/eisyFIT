@@ -21,6 +21,7 @@ from eis_model import (
     copy_parameter_values,
     copy_project_state,
     sort_spectrum,
+    spectrum_sort_order,
 )
 from circuit_structure import circuits_equivalent, map_parameter_name, parameter_name_mapping
 
@@ -691,6 +692,7 @@ class FitResult:
     elapsed_seconds: float = 0.0
     jacobian_mode: str = "numerical"
     jacobian_fallback_reason: str | None = None
+    point_weight_summary: dict[str, object] | None = None
 
     def __iter__(self):
         """Backward-compatible unpacking for existing batch/refinement callers."""
@@ -714,6 +716,7 @@ def _fit_provenance(result: FitResult) -> dict[str, object]:
         "stages": result.stages,
         "jacobian_mode": result.jacobian_mode,
         "jacobian_fallback_reason": result.jacobian_fallback_reason,
+        "point_weights": result.point_weight_summary or {"custom_weights": False},
     }
 
 
@@ -2245,9 +2248,27 @@ def _fit_cycle_impl(
     included = state.included
     frequency = state.frequency_hz[included]
     impedance = state.impedance[included]
+    weights = as_1d_array(state.weights)[included].astype(float)
     if frequency.size < 3:
         raise ValueError("At least three included points are required for fitting")
-    frequency, impedance = sort_spectrum(frequency, impedance)
+    order = spectrum_sort_order(frequency)
+    frequency, impedance, weights = frequency[order], impedance[order], weights[order]
+    custom_weights = bool(np.any(weights != 1.0))
+    weight_summary: dict[str, object] = {"custom_weights": custom_weights}
+    if custom_weights:
+        weight_summary.update(
+            weighted_points=int(np.count_nonzero(weights != 1.0)),
+            min_weight=float(np.min(weights)),
+            max_weight=float(np.max(weights)),
+        )
+
+    def _sigma_points() -> np.ndarray:
+        # curve_fit divides residuals by sigma; a point weight w scales the
+        # residual by w, so sigma = 1 / w (composed with |Z| weighting).
+        sigma = np.ones(impedance.size, dtype=float)
+        if options.weight_by_modulus:
+            sigma = np.maximum(np.abs(impedance), np.finfo(float).eps)
+        return sigma / weights
     initial_parameters = np.array([parameter.initial for parameter in parameters], dtype=float)
     circuit_parameters_only = initial_parameters.copy()
     fixed_constants = {
@@ -2290,9 +2311,9 @@ def _fit_cycle_impl(
                     return np.hstack((z.real, z.imag))
 
                 sigma = None
-                if options.weight_by_modulus:
-                    abs_z = np.abs(impedance)
-                    sigma = np.hstack((abs_z, abs_z))
+                if options.weight_by_modulus or custom_weights:
+                    sigma_points = _sigma_points()
+                    sigma = np.hstack((sigma_points, sigma_points))
                 popt, pcov = curve_fit(
                     _model,
                     frequency,
@@ -2311,6 +2332,19 @@ def _fit_cycle_impl(
             else:
                 from impedance.models.circuits.fitting import circuit_fit
 
+                # circuit_fit overwrites a sigma kwarg with |Z| when
+                # weight_by_modulus is set, so compose the sigma here and
+                # always pass weight_by_modulus=False when custom weights
+                # are active.
+                fit_kwargs: dict[str, object] = {
+                    "weight_by_modulus": options.weight_by_modulus
+                }
+                if custom_weights:
+                    sigma_points = _sigma_points()
+                    fit_kwargs = {
+                        "weight_by_modulus": False,
+                        "sigma": np.hstack((sigma_points, sigma_points)),
+                    }
                 fitted_free, errors_free = circuit_fit(
                     frequency,
                     impedance,
@@ -2321,7 +2355,7 @@ def _fit_cycle_impl(
                         [parameter.lower for parameter in free_parameters],
                         [parameter.upper for parameter in free_parameters],
                     ),
-                    weight_by_modulus=options.weight_by_modulus,
+                    **fit_kwargs,
                 )
             fitted_free = as_1d_array(fitted_free).astype(float)
             errors_free = np.abs(as_1d_array(errors_free).astype(float))
@@ -2348,6 +2382,8 @@ def _fit_cycle_impl(
         difference = fit_at_data[included] - state.impedance[included]
         if options.weight_by_modulus:
             difference = difference / np.maximum(np.abs(state.impedance[included]), np.finfo(float).eps)
+        if custom_weights:
+            difference = difference * as_1d_array(state.weights)[included]
         objective_value = float(np.sum(np.concatenate((difference.real, difference.imag)) ** 2))
         return FitResult(
             fitted_parameters=fitted,
@@ -2362,6 +2398,7 @@ def _fit_cycle_impl(
             options=options,
             elapsed_seconds=time.perf_counter() - started,
             jacobian_mode="numerical",
+            point_weight_summary=weight_summary,
         )
 
     free_initial = initial_parameters[free_indices]
@@ -2383,6 +2420,8 @@ def _fit_cycle_impl(
         difference = predict(values) - impedance
         if options.weight_by_modulus:
             difference = difference / np.maximum(np.abs(impedance), np.finfo(float).eps)
+        if custom_weights:
+            difference = difference * weights
         return np.concatenate((difference.real, difference.imag))
 
     jacobian_mode = options.resolved_jacobian_mode()
@@ -2406,6 +2445,8 @@ def _fit_cycle_impl(
                 derivative = circuit_jacobian(frequency, circuit, full, parameter_names)[:, free_indices]
                 if options.weight_by_modulus:
                     derivative = derivative / np.maximum(np.abs(impedance), np.finfo(float).eps)[:, None]
+                if custom_weights:
+                    derivative = derivative * weights[:, None]
                 return np.vstack((derivative.real, derivative.imag))
 
             actual_jacobian_mode = "analytical"
@@ -2553,6 +2594,7 @@ def _fit_cycle_impl(
         elapsed_seconds=time.perf_counter() - started,
         jacobian_mode=actual_jacobian_mode,
         jacobian_fallback_reason=jacobian_fallback_reason,
+        point_weight_summary=weight_summary,
     )
 
 

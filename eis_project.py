@@ -272,6 +272,7 @@ def _cycle_to_dict(cycle: CycleState) -> dict[str, object]:
         "auto_max_frequency": bool(cycle.auto_max_frequency),
         "manually_included": cycle.manually_included.astype(bool).tolist(),
         "outliers": cycle.outliers.astype(bool).tolist(),
+        "weights": cycle.weights.astype(float).tolist(),
         "parameters": [_parameter_to_dict(value) for value in cycle.parameters],
         "fit_parameters": (
             cycle.fit_parameters.tolist() if cycle.fit_parameters is not None else None
@@ -396,7 +397,7 @@ def dataframe_from_payload(payload: str):
 
 
 _HISTORY_CYCLE_KEY_GROUPS: tuple[tuple[frozenset[str], str], ...] = (
-    (frozenset({"manually_included", "outliers"}), "points"),
+    (frozenset({"manually_included", "outliers", "weights"}), "points"),
     (frozenset({"frequency_window", "auto_max_frequency"}), "frequency window"),
     (frozenset({"parameters"}), "parameters"),
     (
@@ -611,8 +612,16 @@ def load_project_file(
             outliers = np.zeros(cycle.frequency_hz.size, dtype=bool)
         if outliers.size != cycle.frequency_hz.size:
             raise ValueError(f"Cycle {cycle_number} has an incompatible outlier mask")
+        weights = as_1d_array(saved.get("weights", [])).astype(float)
+        if weights.size == 0:
+            weights = np.ones(cycle.frequency_hz.size, dtype=float)
+        if weights.size != cycle.frequency_hz.size:
+            raise ValueError(f"Cycle {cycle_number} has an incompatible weight array")
+        if not np.all(np.isfinite(weights)) or np.any(weights <= 0.0):
+            raise ValueError(f"Cycle {cycle_number} has invalid point weights")
         cycle.manually_included = included
         cycle.outliers = outliers
+        cycle.weights = weights
         window = saved.get("frequency_window")
         cycle.frequency_window = (
             (float(window[0]), float(window[1])) if window is not None else None

@@ -1272,6 +1272,184 @@ class MetadataEditDialog(tk.Toplevel):
         self.destroy()
 
 
+class PointWeightsDialog(tk.Toplevel):
+    """Edit per-point EEC fit weights for one spectrum.
+
+    Each weight scales that point's residual in the fit (residual × weight,
+    1 = neutral). Weights of excluded points have no effect on the fit.
+    """
+
+    def __init__(self, parent, cycle, on_apply) -> None:
+        super().__init__(parent)
+        self.title(f"Point weights · cycle {cycle.cycle}")
+        self.geometry("600x520")
+        self.minsize(500, 340)
+        self.transient(parent)
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        self._cycle = cycle
+        self._on_apply = on_apply
+        self._pending: dict[int, float] = {}
+        self._editor: ttk.Entry | None = None
+
+        body = ttk.Frame(self, padding=12)
+        body.pack(fill=tk.BOTH, expand=True)
+        body.columnconfigure(0, weight=1)
+        body.rowconfigure(1, weight=1)
+
+        custom = int(np.count_nonzero(cycle.weights != 1.0))
+        ttk.Label(
+            body,
+            text=(
+                "Each weight scales that point's residual in the EEC fit "
+                "(residual × weight; 1 = neutral). Weights must be positive "
+                "finite numbers. Weights of excluded points are ignored. "
+                f"Currently {custom} of {cycle.frequency_hz.size} points are "
+                "non-neutral. Double-click a Weight cell to edit it."
+            ),
+            wraplength=550,
+            justify=tk.LEFT,
+        ).grid(row=0, column=0, sticky="w", pady=(0, 8))
+
+        table_frame = ttk.Frame(body)
+        table_frame.grid(row=1, column=0, sticky="nsew")
+        table_frame.columnconfigure(0, weight=1)
+        table_frame.rowconfigure(0, weight=1)
+        columns = ("index", "frequency", "modulus", "included", "weight")
+        self.table = ttk.Treeview(
+            table_frame, columns=columns, show="headings", height=18
+        )
+        headings = {
+            "index": "Point",
+            "frequency": "f (Hz)",
+            "modulus": "|Z| (Ω)",
+            "included": "Included",
+            "weight": "Weight",
+        }
+        for column, heading in headings.items():
+            self.table.heading(column, text=heading)
+            self.table.column(
+                column,
+                width=70 if column == "index" else 110,
+                anchor="center" if column == "included" else "e",
+            )
+        included_mask = cycle.included
+        for index in range(cycle.frequency_hz.size):
+            self.table.insert(
+                "",
+                tk.END,
+                iid=str(index),
+                values=(
+                    str(index),
+                    f"{cycle.frequency_hz[index]:.6g}",
+                    f"{abs(cycle.impedance[index]):.6g}",
+                    "yes" if included_mask[index] else "no",
+                    f"{cycle.weights[index]:.6g}",
+                ),
+                tags=("excluded",) if not included_mask[index] else (),
+            )
+        self.table.tag_configure("excluded", foreground="#888888")
+        scrollbar = ttk.Scrollbar(
+            table_frame, orient=tk.VERTICAL, command=self.table.yview
+        )
+        self.table.configure(yscrollcommand=scrollbar.set)
+        self.table.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        self.table.bind("<Double-1>", self._begin_edit)
+
+        buttons = ttk.Frame(body)
+        buttons.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        ttk.Button(buttons, text="All 1.0", command=self._set_all_one).pack(
+            side=tk.LEFT
+        )
+        ttk.Button(buttons, text="1/|Z|", command=self._set_inverse_modulus).pack(
+            side=tk.LEFT, padx=(6, 0)
+        )
+        ttk.Button(buttons, text="Cancel", command=self.destroy).pack(
+            side=tk.RIGHT, padx=(6, 0)
+        )
+        ttk.Button(buttons, text="Apply", command=self._accept).pack(side=tk.RIGHT)
+
+        self.grab_set()
+
+    def _set_cell_weight(self, index: int, weight: float) -> None:
+        self.table.set(str(index), "weight", f"{weight:.6g}")
+
+    def _set_all_one(self) -> None:
+        self._pending.clear()
+        for index in range(self._cycle.frequency_hz.size):
+            self._set_cell_weight(index, 1.0)
+
+    def _set_inverse_modulus(self) -> None:
+        self._pending.clear()
+        tiny = np.finfo(float).eps
+        for index in range(self._cycle.frequency_hz.size):
+            weight = 1.0 / max(abs(self._cycle.impedance[index]), tiny)
+            self._pending[index] = weight
+            self._set_cell_weight(index, weight)
+
+    def _begin_edit(self, event) -> None:
+        if self.table.identify_region(event.x, event.y) != "cell":
+            return
+        if self.table.identify_column(event.x) != "#5":
+            return
+        item = self.table.identify_row(event.y)
+        if not item:
+            return
+        self._commit_edit()
+        cell = self.table.bbox(item, "weight")
+        if not cell:
+            return
+        index = int(item)
+        editor = ttk.Entry(self.table)
+        editor.insert(0, self.table.set(item, "weight"))
+        editor.select_range(0, tk.END)
+        editor.place(x=cell[0], y=cell[1], width=cell[2], height=cell[3])
+        editor.focus_set()
+        editor.bind("<Return>", lambda _event: self._commit_edit())
+        editor.bind("<Escape>", lambda _event: self._discard_edit())
+        editor.bind("<FocusOut>", lambda _event: self._commit_edit())
+        self._editor = editor
+
+    def _commit_edit(self) -> None:
+        editor = self._editor
+        if editor is None:
+            return
+        self._editor = None
+        item = self.table.focus()
+        try:
+            weight = float(editor.get())
+        except (TypeError, ValueError):
+            weight = float("nan")
+        editor.destroy()
+        if item and np.isfinite(weight) and weight > 0.0:
+            index = int(item)
+            self._pending[index] = weight
+            self._set_cell_weight(index, weight)
+        elif item:
+            messagebox.showerror(
+                "Invalid weight",
+                "Enter a positive finite number.",
+                parent=self,
+            )
+            index = int(item)
+            stored = self._pending.get(index, self._cycle.weights[index])
+            self._set_cell_weight(index, stored)
+
+    def _discard_edit(self) -> None:
+        editor = self._editor
+        self._editor = None
+        if editor is not None:
+            editor.destroy()
+
+    def _accept(self) -> None:
+        self._commit_edit()
+        values = np.array(self._cycle.weights, copy=True)
+        for index, weight in self._pending.items():
+            values[index] = weight
+        self._on_apply(values)
+        self.destroy()
+
+
 class ElectrodeSelectionDialog(tk.Toplevel):
     _labels = {
         "working": "WE–RE",
@@ -1765,6 +1943,10 @@ class EISApplication:
         self.fit_menu.add_command(
             label="Detect EEC parameter anomalies…",
             command=self.detect_eec_anomalies,
+        )
+        self.fit_menu.add_command(
+            label="Edit point weights…",
+            command=self.edit_point_weights,
         )
         self.fit_menu.add_separator()
         self.fit_menu.add_command(
@@ -2538,7 +2720,10 @@ class EISApplication:
         ttk.Entry(limits, textvariable=self.fit_iterations_var).grid(row=0, column=1, padx=(8, 0), sticky="ew")
         ttk.Checkbutton(
             optimizer_tab, text="Weight residuals by |Z|", variable=self.fit_weight_modulus_var
-        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        ).grid(row=4, column=0, sticky="w", pady=(8, 0))
+        ttk.Button(
+            optimizer_tab, text="Per-point weights…", command=self.edit_point_weights
+        ).grid(row=4, column=1, sticky="e", pady=(8, 0))
         ttk.Label(optimizer_tab, text="Local Jacobian").grid(row=5, column=0, sticky="w", pady=(8, 0))
         ttk.Combobox(
             optimizer_tab,
@@ -12476,6 +12661,25 @@ class EISApplication:
         self._update_status(f"toggled {indices.size} points in selected area")
         self._fit_after_point_edit()
 
+    def edit_point_weights(self) -> None:
+        if self.busy or self.state is None:
+            return
+        cycle = self.state.active
+
+        def apply_weights(values: np.ndarray) -> None:
+            try:
+                cycle.set_point_weights(values)
+            except ValueError as error:
+                messagebox.showerror(
+                    "Invalid point weights", str(error), parent=self.root
+                )
+                return
+            self._refresh_plot(rescale=False)
+            self._update_status("point weights updated")
+            self._fit_after_point_edit()
+
+        PointWeightsDialog(self.root, cycle, apply_weights)
+
     def toggle_point_edit_mode(self, _event=None) -> str | None:
         self.point_toggle_mode = not self.point_toggle_mode
         if self.point_toggle_mode:
@@ -12527,9 +12731,14 @@ class EISApplication:
             if self.point_toggle_mode
             else "wheel/drag zoom active"
         )
+        weights_note = (
+            f" · custom weights on {int(np.count_nonzero(cycle.weights != 1.0))} points"
+            if cycle.has_custom_weights
+            else ""
+        )
         status = (
             f"Cycle {cycle.cycle} · {included}/{total} points included · "
-            f"{outliers} detected outliers · {mode_text}"
+            f"{outliers} detected outliers · {mode_text}{weights_note}"
         )
         self.status_var.set(f"{status} · {suffix}" if suffix else status)
 
@@ -14103,6 +14312,14 @@ class EISApplication:
             f"converged={stage['converged']}"
             for stage in result.stages
         ) or "least_squares: completed"
+        weights = getattr(result, "point_weight_summary", None) or {}
+        if weights.get("custom_weights"):
+            weights_text = (
+                f"custom on {weights.get('weighted_points')} points "
+                f"(min {weights.get('min_weight'):.3g}, max {weights.get('max_weight'):.3g})"
+            )
+        else:
+            weights_text = "none"
         messagebox.showinfo(
             "EEC fit diagnostics",
             f"Pipeline: {' → '.join(result.options.stages())}\n"
@@ -14110,6 +14327,7 @@ class EISApplication:
             f"Objective: {result.objective:.6g}\n"
             f"Jacobian: {result.jacobian_mode}"
             + (f" (fallback: {result.jacobian_fallback_reason})" if result.jacobian_fallback_reason else "")
+            + f"\nPoint weights: {weights_text}"
             + "\n"
             f"Elapsed: {result.elapsed_seconds:.3f} s\n\n{stages}",
             parent=self.root,
@@ -14178,6 +14396,8 @@ class EISApplication:
                 "converged": result.converged,
                 "elapsed_seconds": result.elapsed_seconds,
                 "stages": result.stages,
+                "point_weights": getattr(result, "point_weight_summary", None)
+                or {"custom_weights": False},
             }
         for parameter, fitted, error_percent in zip(
             parameters, fitted_parameters, errors_percent

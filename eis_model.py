@@ -25,11 +25,15 @@ def copy_parameter_values(parameters: list["ParameterValue"]) -> list["Parameter
     ]
 
 
+def spectrum_sort_order(frequency_hz: np.ndarray) -> np.ndarray:
+    return np.argsort(frequency_hz)[::-1]
+
+
 def sort_spectrum(
     frequency_hz: np.ndarray,
     impedance: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    order = np.argsort(frequency_hz)[::-1]
+    order = spectrum_sort_order(frequency_hz)
     return frequency_hz[order], impedance[order]
 
 
@@ -49,6 +53,7 @@ def copy_cycle_state(cycle: CycleState) -> CycleState:
         time_s=cycle.time_s,
         manually_included=np.array(cycle.manually_included, copy=True),
         outliers=np.array(cycle.outliers, copy=True),
+        weights=_copy_array(cycle.weights),
         frequency_window=(
             tuple(cycle.frequency_window)
             if cycle.frequency_window is not None
@@ -134,6 +139,7 @@ class CycleState:
     time_s: float | None = None
     manually_included: np.ndarray | None = None
     outliers: np.ndarray | None = None
+    weights: np.ndarray | None = None
     frequency_window: tuple[float, float] | None = None
     auto_max_frequency: bool = False
     parameters: list[ParameterValue] = field(default_factory=list)
@@ -181,6 +187,14 @@ class CycleState:
             self.outliers = np.zeros(self.frequency_hz.size, dtype=bool)
         else:
             self.outliers = as_1d_array(self.outliers).astype(bool)
+        if self.weights is None:
+            self.weights = np.ones(self.frequency_hz.size, dtype=float)
+        else:
+            self.weights = as_1d_array(self.weights).astype(float)
+        if self.weights.size != self.frequency_hz.size:
+            raise ValueError("Point weights must match the number of measured points")
+        if not np.all(np.isfinite(self.weights)) or np.any(self.weights <= 0.0):
+            raise ValueError("Point weights must be positive finite numbers")
         if self.saved_ridge_included_mask is not None:
             self.saved_ridge_included_mask = (
                 as_1d_array(self.saved_ridge_included_mask).astype(bool)
@@ -237,6 +251,35 @@ class CycleState:
         self.manually_included[:] = True
         self.outliers[:] = False
         self.invalidate_drt_cache()
+        self.clear_fit()
+
+    @property
+    def has_custom_weights(self) -> bool:
+        return bool(np.any(self.weights != 1.0))
+
+    def _validate_weights(self, candidate: np.ndarray) -> np.ndarray:
+        candidate = as_1d_array(candidate).astype(float)
+        if candidate.size != self.frequency_hz.size:
+            raise ValueError("Point weights must match the number of measured points")
+        if not np.all(np.isfinite(candidate)) or np.any(candidate <= 0.0):
+            raise ValueError("Point weights must be positive finite numbers")
+        return candidate
+
+    def set_point_weight(self, index: int, weight: float) -> None:
+        if not 0 <= index < self.frequency_hz.size:
+            return
+        value = float(weight)
+        if not np.isfinite(value) or value <= 0.0:
+            raise ValueError("Point weight must be a positive finite number")
+        self.weights[index] = value
+        self.clear_fit()
+
+    def set_point_weights(self, weights) -> None:
+        self.weights = self._validate_weights(weights)
+        self.clear_fit()
+
+    def reset_weights(self) -> None:
+        self.weights[:] = 1.0
         self.clear_fit()
 
     def clear_fit(self) -> None:
