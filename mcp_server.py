@@ -34,7 +34,7 @@ import numpy as np
 
 from circuit_structure import circuits_equivalent
 from eis_model import CycleState, ParameterValue, ProjectState
-from eis_project import save_project_file
+from eis_project import export_fit_parameters_for_states, save_project_file
 from eis_services import (
     FittedEECRecord,
     FitOptions,
@@ -1375,6 +1375,34 @@ def save_project(project: str, path: str | None = None, backup: bool = True) -> 
         }
 
 
+def export_fit_parameters(
+    project: str,
+    path: str | None = None,
+    dataset_id: str | None = None,
+) -> dict:
+    """Export fitted EEC parameters of a project to a CSV file.
+
+    Writes one row per fitted spectrum with source metadata, all fitted
+    parameter values and their error percentages, and derived per-block
+    tau/C columns — the same format the GUI's Export menu produces.
+    When ``path`` is omitted, defaults to ``<project>_fit_export.csv``
+    next to the project file.  Pass ``dataset_id`` to export only one
+    dataset.  Returns the output path and the number of rows written.
+    """
+    with _SESSION.lock:
+        opened = _get_project(project)
+        states = [loaded.state for _ds, loaded, _st in opened.datasets
+                  if dataset_id is None or _ds == dataset_id]
+        if not states:
+            raise ValueError(f"No datasets matched in project {project!r}")
+        target = Path(str(path)).expanduser().resolve() if path else \
+            opened.path.with_name(opened.path.stem.replace(".eisfit.json", "") + "_fit_export.csv")
+        if target.suffix != ".csv":
+            target = target.with_suffix(".csv")
+        count = export_fit_parameters_for_states(states, target)
+        return {"exported": str(target), "rows": count, "project": str(opened.path)}
+
+
 # ---------------------------------------------------------------------------
 # MCP wiring (lazy import so the tool functions stay testable without the SDK)
 # ---------------------------------------------------------------------------
@@ -1404,6 +1432,7 @@ _TOOLS = [
     propose_corrections,
     apply_corrections,
     save_project,
+    export_fit_parameters,
 ]
 
 

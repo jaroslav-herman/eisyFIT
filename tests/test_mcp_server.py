@@ -242,6 +242,23 @@ class McpToolTests(unittest.TestCase):
         self.assertEqual(closed["closed"], self.project)
         self.assertEqual(mcp_server.list_projects()["projects"], [])
 
+    def test_export_fit_parameters(self):
+        import csv as _csv
+        mcp_server.open_project(self.project)
+        identity = mcp_server.list_spectra(self.project)["spectra"][0]["identity"]
+        mcp_server.fit_spectrum(self.project, identity, timeout_seconds=30.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "export.csv"
+            result = mcp_server.export_fit_parameters(self.project, path=str(out))
+            self.assertTrue(out.is_file())
+            self.assertGreater(result["rows"], 0)
+            self.assertEqual(result["exported"], str(out))
+            with out.open(encoding="utf-8-sig") as fh:
+                rows = list(_csv.DictReader(fh))
+            self.assertEqual(len(rows), result["rows"])
+            self.assertIn("R0", rows[0])
+            self.assertIn("circuit", rows[0])
+
 
 @unittest.skipUnless(MCP_AVAILABLE, "mcp SDK not installed")
 class StdioSmokeTests(unittest.TestCase):
