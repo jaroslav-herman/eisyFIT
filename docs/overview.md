@@ -48,4 +48,5 @@ Use the **Analysis mode** selector at the top of the right-hand control panel:
 - Interpreting DRT results: read [drt-and-outliers.md](drt-and-outliers.md).
 - Working with fitted parameters across many spectra: read [explorers-and-export.md](explorers-and-export.md).
 - Using machine-learning assistance: read [ml-processing.md](ml-processing.md).
+- Driving eisyFIT from an AI agent (MCP): read [mcp-server.md](mcp-server.md).
 - Changing fitting behavior: read [preferences.md](preferences.md).

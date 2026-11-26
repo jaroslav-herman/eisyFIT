@@ -9,8 +9,9 @@ following the same sidecar rules as the ML results files.
 
 The GUI appends one entry per detected state change while recording is
 enabled in Preferences; entries written by the correction-replay feature are
-tagged with ``applied_by: "replay"`` so user-taught and replayed steps can be
-distinguished later.
+tagged with ``applied_by: "replay"`` and entries written by the MCP server
+(``mcp_server.py``) with ``applied_by: "mcp"``, so user-taught, replayed, and
+agent-applied steps can be distinguished later.
 """
 
 from __future__ import annotations
@@ -254,7 +255,7 @@ def make_action_entry(
     change_dict = change.to_dict() if isinstance(change, CycleChange) else (change or {})
     return {
         "timestamp": timestamp,
-        "applied_by": applied_by if applied_by in {"user", "replay"} else "user",
+        "applied_by": applied_by if applied_by in {"user", "replay", "mcp"} else "user",
         "action": str(action),
         "dataset_id": str(dataset_id),
         "dataset_label": str(dataset_label),

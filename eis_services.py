@@ -1223,6 +1223,204 @@ def load_project(
     return projects[0]
 
 
+def load_ml_results_project(
+    path: Path, payload: dict
+) -> list[tuple[str, LoadedProject, ProjectState]]:
+    """Headless loader for ``eis-fitting-ml-results`` sidecar files.
+
+    GUI-independent equivalent of the editor's ML-results import: groups the
+    stored spectra by source file and rebuilds one dataset per source.
+    """
+    import pandas as pd
+
+    root = payload.get("ml_results", payload)
+    spectra = root.get("spectra") if isinstance(root, dict) else None
+    if not isinstance(spectra, list) or not spectra:
+        raise ValueError("The ML-results file contains no spectra")
+    grouped: dict[str, list[dict]] = {}
+    for spectrum in spectra:
+        if not isinstance(spectrum, dict):
+            continue
+        spectrum_id = str(spectrum.get("spectrum_id") or "")
+        source_name = str(spectrum.get("source_name") or "").strip()
+        if not source_name:
+            parts = spectrum_id.split("::")
+            source_name = parts[1] if len(parts) >= 4 else str(root.get("source_file") or path.name)
+        grouped.setdefault(source_name, []).append(spectrum)
+    restored = []
+    for source_name, source_spectra in grouped.items():
+        rows = []
+        circuit = None
+        metadata_by_cycle: dict[int, dict[str, object]] = {}
+        for spectrum in source_spectra:
+            frequency = np.asarray(spectrum.get("frequency", []), dtype=float)
+            real = np.asarray(spectrum.get("z_real", []), dtype=float)
+            imaginary = np.asarray(spectrum.get("z_imag", []), dtype=float)
+            if frequency.size == 0 or frequency.size != real.size or real.size != imaginary.size:
+                continue
+            cycle = int(spectrum.get("cycle", len(metadata_by_cycle) + 1))
+            if cycle in metadata_by_cycle:
+                raise ValueError(f"Duplicate ML spectrum key ({source_name!r}, {cycle})")
+            circuit = circuit or str(spectrum.get("existing_eec_topology") or "").strip()
+            metadata = dict(spectrum.get("metadata") or {})
+            metadata.setdefault("source_name", source_name)
+            metadata_by_cycle[cycle] = metadata
+            for frequency_value, real_value, imaginary_value in zip(frequency, real, imaginary):
+                rows.append({
+                    "freq_hz": frequency_value,
+                    "cycle_number": cycle,
+                    "time_s": spectrum.get("time"),
+                    "i_ma": spectrum.get("current"),
+                    "ewe_v": spectrum.get("voltage"),
+                    "re_z_ohm": real_value,
+                    "minus_im_z_ohm": -imaginary_value,
+                })
+        if not rows:
+            continue
+        circuit = circuit or "R0-L0-p(R1,CPE1)"
+        dataframe = pd.DataFrame(rows)
+        loaded = load_project_from_dataframe(
+            dataframe,
+            path,
+            min(dataframe["cycle_number"].astype(int)),
+            "working",
+            circuit,
+            technique="ML results",
+        )
+        loaded.dataset_id = f"ml-results::{source_name}"
+        loaded.dataset_label = f"{source_name} [ML results]"
+        for spectrum in source_spectra:
+            cycle_number = int(spectrum.get("cycle", -1))
+            if cycle_number not in loaded.state.available_cycles:
+                continue
+            cycle = load_cycle(dataframe, cycle_number, "working")
+            cycle.circuit = circuit
+            cycle.parameters = loaded.state.parameters_for(cycle_number)
+            cycle.custom_metadata.update(metadata_by_cycle.get(cycle_number, {}))
+            for key in ("ml_envelope_mask", "stage2_active_mask", "stage1_active_mask"):
+                mask = spectrum.get(key)
+                if mask is not None and len(mask) == cycle.frequency_hz.size:
+                    cycle.manually_included = np.asarray(mask, dtype=bool)
+                    break
+            minimum = spectrum.get("predicted_f_min")
+            maximum = spectrum.get("predicted_f_max")
+            try:
+                if float(minimum) > 0 and float(maximum) > 0:
+                    cycle.frequency_window = tuple(sorted((float(minimum), float(maximum))))
+            except (TypeError, ValueError):
+                pass
+            loaded.state.cycles[cycle_number] = cycle
+            for metadata_row in loaded.spectra:
+                if metadata_row.cycle == cycle_number:
+                    metadata_row.custom_metadata.update(cycle.custom_metadata)
+                    break
+        loaded.state.active_cycle = min(loaded.state.available_cycles)
+        restored.append((loaded.dataset_id, loaded, loaded.state))
+    if not restored:
+        raise ValueError("The ML-results file contains no usable impedance data")
+    return restored
+
+
+def load_saved_project(
+    path: Path,
+) -> list[tuple[str, LoadedProject, ProjectState]]:
+    """Load a saved ``.eisfit.json[.gz]`` project (or ML-results sidecar) headless.
+
+    GUI-independent equivalent of the editor's project open: restores every
+    embedded dataset (or re-reads the source data file) and replays the saved
+    per-cycle state on top.  Returns ``(dataset_id, loaded, state)`` triples.
+    """
+    from eis_project import dataframe_from_payload, load_json_payload, load_project_file
+
+    path = Path(path)
+    payload = load_json_payload(path)
+    if payload.get("format") == "eis-fitting-ml-results":
+        raise ValueError(
+            "This is an ML-results sidecar, not an EIS-fit project. "
+            "Open the associated .eisfit project and load the sidecar from the ML controls."
+        )
+    is_ml_results = (
+        payload.get("format") != "eis-fitting-project"
+        and "ml_results" in payload
+    ) or (
+        isinstance(payload.get("spectra"), list)
+        and "source_path" not in payload
+        and "datasets" not in payload
+    )
+    if is_ml_results:
+        return load_ml_results_project(path, payload)
+    embedded_datasets = payload.get("datasets")
+    if embedded_datasets:
+        restored_projects = []
+        for dataset in embedded_datasets:
+            state_payload = dataset["state"]
+            source_path = Path(str(state_payload["source_path"]))
+            dataframe = dataframe_from_payload(dataset["dataframe"])
+            loaded = load_project_from_dataframe(
+                dataframe,
+                source_path,
+                int(state_payload.get("active_cycle", 1)),
+                str(state_payload.get("control", "working")),
+                str(state_payload["circuit"]),
+            )
+            restored = load_project_file(
+                loaded.state,
+                dataframe,
+                path,
+                payload=state_payload,
+            )
+            loaded.state = restored
+            loaded.spectra = catalog_spectra(
+                dataframe,
+                restored.available_cycles,
+                restored.control,
+                {
+                    cycle_number: {
+                        **cycle.custom_metadata,
+                        "time_s": cycle.time_s,
+                    }
+                    for cycle_number, cycle in restored.cycles.items()
+                },
+            )
+            restored_projects.append(
+                (str(dataset["dataset_id"]), loaded, restored)
+            )
+        if not restored_projects:
+            raise ValueError("The project contains no embedded datasets")
+        return restored_projects
+    source_path = Path(str(payload["source_path"]))
+    if not source_path.is_absolute():
+        source_path = (path.parent / source_path).resolve()
+    if not source_path.is_file():
+        raise FileNotFoundError(
+            f"The source data file saved in this project was not found: {source_path}"
+        )
+    circuit = str(payload["circuit"])
+    control = str(payload.get("control", "cell"))
+    active_cycle = int(payload.get("active_cycle", 1))
+    report = load_projects([source_path], control, circuit, active_cycle)
+    if report.errors:
+        raise ValueError(report.errors[0][1])
+    if not report.loaded:
+        raise ValueError(f"No spectra could be loaded from {source_path.name}")
+    dataset_id, loaded = report.loaded[0]
+    restored = load_project_file(loaded.state, loaded.dataframe, path)
+    loaded.state = restored
+    loaded.spectra = catalog_spectra(
+        loaded.dataframe,
+        restored.available_cycles,
+        restored.control,
+        {
+            cycle_number: {
+                **cycle.custom_metadata,
+                "time_s": cycle.time_s,
+            }
+            for cycle_number, cycle in restored.cycles.items()
+        },
+    )
+    return [(dataset_id, loaded, restored)]
+
+
 def _normalise_import_column(name: object) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(name).strip().casefold())
 

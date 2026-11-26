@@ -83,3 +83,7 @@ similar spectra — no model is trained.
 Only parameter and (structurally equivalent) circuit changes are replayed;
 point masks and frequency windows are spectrum-specific and are never
 force-matched onto another spectrum.
+
+The same sidecar and replay logic are exposed to AI agents through the MCP
+server — see [mcp-server.md](mcp-server.md). Agent-applied corrections are
+logged with `applied_by: "mcp"` and become replay sources themselves.
