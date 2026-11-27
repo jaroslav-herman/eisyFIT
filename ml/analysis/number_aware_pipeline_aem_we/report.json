@@ -3,271 +3,207 @@
   "pipeline": "number_aware_staged_eis",
   "version": "3",
   "training_projects": [
-    "/workspace/github__jaroslav-herman__eisyFIT/training_data/AEM/271.eisfit.json.gz",
-    "/workspace/github__jaroslav-herman__eisyFIT/training_data/AEM/399.eisfit.json.gz",
-    "/workspace/github__jaroslav-herman__eisyFIT/training_data/AEM/400.eisfit.json.gz",
-    "/workspace/github__jaroslav-herman__eisyFIT/training_data/AEM/472.eisfit.json.gz",
-    "/workspace/github__jaroslav-herman__eisyFIT/training_data/AEM/486.eisfit.json.gz",
-    "/workspace/github__jaroslav-herman__eisyFIT/training_data/AEM/490.eisfit.json.gz",
-    "/workspace/github__jaroslav-herman__eisyFIT/training_data/AEM/491.eisfit.json.gz",
-    "/workspace/github__jaroslav-herman__eisyFIT/training_data/AEM/498.eisfit.json.gz",
-    "/workspace/github__jaroslav-herman__eisyFIT/training_data/AEM/499.eisfit.json.gz"
+    "C:\\Users\\Herman\\OneDrive - Univerzita Karlova\\AEM-WE\\474.eisfit.json.gz",
+    "C:\\Users\\Herman\\OneDrive - Univerzita Karlova\\AEM-WE\\486.eisfit.json.gz",
+    "C:\\Users\\Herman\\OneDrive - Univerzita Karlova\\AEM-WE\\491.eisfit.json.gz",
+    "C:\\Users\\Herman\\OneDrive - Univerzita Karlova\\AEM-WE\\499.eisfit.json.gz",
+    "C:\\Users\\Herman\\OneDrive - Univerzita Karlova\\AEM-WE\\516.eisfit.json.gz",
+    "C:\\Users\\Herman\\OneDrive - Univerzita Karlova\\AEM-WE\\530.eisfit.json.gz"
   ],
   "training_samples": [
-    "271",
-    "399",
-    "400",
-    "472",
+    "474",
     "486",
-    "490",
     "491",
-    "498",
-    "499"
+    "499",
+    "516",
+    "530"
   ],
-  "training_records": 3624,
+  "training_records": 2157,
   "training_exclusion_counts": {
-    "missing_fit": 36
+    "missing_fit": 23
   },
   "circuit_classes": [
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)"
   ],
   "topology_classes": [
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)"
   ],
   "parameter_training": {
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::R0": {
-      "training_spectra": 2259,
+      "training_spectra": 1012,
       "target_transform": "log10",
-      "target_median": 0.02153585433940582,
+      "target_median": 0.022391213287254186,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::L0": {
-      "training_spectra": 2361,
+      "training_spectra": 1294,
       "target_transform": "log10",
-      "target_median": 4.2584790099047665e-08,
+      "target_median": 9.826087949785038e-08,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::R1": {
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "target_transform": "log10",
-      "target_median": 2.1851051329045887,
+      "target_median": 2.0563608375190645,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
-      "selected_mode": "current_aware"
+      "selected_mode": "inverse_current"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE1_0": {
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "target_transform": "log10",
-      "target_median": 0.18052023927505714,
+      "target_median": 0.19232398138229273,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "selected_mode": "inverse_current"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE1_1": {
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "target_transform": "logit",
-      "target_median": 0.9135731088738304,
+      "target_median": 0.9246837185829158,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::R2": {
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "target_transform": "log10",
-      "target_median": 0.08015895069714783,
+      "target_median": 0.09124477175717835,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
-      "selected_mode": "current_aware"
+      "selected_mode": "inverse_current"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE2_0": {
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "target_transform": "log10",
-      "target_median": 0.16794271717889353,
+      "target_median": 0.1853395480458604,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE2_1": {
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "target_transform": "logit",
-      "target_median": 0.7824244267743438,
+      "target_median": 0.7585941278490811,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::R3": {
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "target_transform": "log10",
-      "target_median": 0.013009529534203153,
+      "target_median": 0.008368357906970592,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
-      "selected_mode": "current_aware"
+      "selected_mode": "inverse_current"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE3_0": {
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "target_transform": "log10",
-      "target_median": 0.3723945534300516,
+      "target_median": 0.15571332705963734,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE3_1": {
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "target_transform": "logit",
-      "target_median": 0.5618517497485874,
+      "target_median": 0.7000000000000001,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R0": {
-      "training_spectra": 1133,
+      "training_spectra": 712,
       "target_transform": "log10",
-      "target_median": 0.02181802992068303,
+      "target_median": 0.02179608481227114,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
-      "selected_mode": "current_aware"
+      "selected_mode": "inverse_current"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::L0": {
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "target_transform": "log10",
-      "target_median": 5.990109999999998e-08,
+      "target_median": 9.937026723703481e-08,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R1": {
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "target_transform": "log10",
-      "target_median": 0.0182414,
+      "target_median": 0.015108880716886776,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE1_0": {
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "target_transform": "log10",
-      "target_median": 0.23837705234636392,
+      "target_median": 0.26850153156305145,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE1_1": {
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "target_transform": "logit",
-      "target_median": 0.957860033607057,
+      "target_median": 0.9554964712898025,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R2": {
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "target_transform": "log10",
-      "target_median": 0.04635960900328777,
+      "target_median": 0.04488061983894601,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE2_0": {
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "target_transform": "log10",
-      "target_median": 0.08442370985564483,
+      "target_median": 0.09037631752268183,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
-      "selected_mode": "current_aware"
+      "selected_mode": "inverse_current"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE2_1": {
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "target_transform": "logit",
-      "target_median": 0.8019563936811608,
+      "target_median": 0.7971201035417255,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R3": {
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "target_transform": "log10",
-      "target_median": 0.00981254235819402,
+      "target_median": 0.008141292644324635,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE3_0": {
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "target_transform": "log10",
-      "target_median": 0.15625869058741262,
+      "target_median": 0.10668903895665661,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE3_1": {
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "target_transform": "logit",
-      "target_median": 0.655471678984925,
+      "target_median": 0.7074469032639947,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R4": {
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "target_transform": "log10",
-      "target_median": 0.0027647000437824843,
+      "target_median": 0.002444606373873393,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE4_0": {
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "target_transform": "log10",
-      "target_median": 16.168500000000016,
+      "target_median": 22.821444023197753,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE4_1": {
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "target_transform": "logit",
       "target_median": 0.9998999999999999,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::R0": {
-      "training_spectra": 2,
-      "target_transform": "log10",
-      "target_median": 0.01129198658360594,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::L0": {
-      "training_spectra": 2,
-      "target_transform": "log10",
-      "target_median": 4.802085072946201e-08,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::R1": {
-      "training_spectra": 2,
-      "target_transform": "log10",
-      "target_median": 5.311313119929515,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::CPE1_0": {
-      "training_spectra": 2,
-      "target_transform": "log10",
-      "target_median": 0.08458818769363194,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::CPE1_1": {
-      "training_spectra": 2,
-      "target_transform": "logit",
-      "target_median": 0.9546194268804031,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::R2": {
-      "training_spectra": 2,
-      "target_transform": "log10",
-      "target_median": 0.18650176022436282,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::CPE2_0": {
-      "training_spectra": 2,
-      "target_transform": "log10",
-      "target_median": 0.3248332911608597,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::CPE2_1": {
-      "training_spectra": 2,
-      "target_transform": "logit",
-      "target_median": 0.5564693332676465,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
       "selected_mode": "current_aware"
     }
   },
@@ -276,1109 +212,853 @@
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "R0",
       "mode": "current_aware",
-      "training_spectra": 2259,
+      "training_spectra": 1012,
       "candidate_scores": {
-        "current_aware": 0.04758612474803695,
-        "inverse_current": 0.053648436652293845
+        "current_aware": 0.0427840877387648,
+        "inverse_current": 0.08155638477268251
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::L0": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "L0",
       "mode": "current_aware",
-      "training_spectra": 2361,
+      "training_spectra": 1294,
       "candidate_scores": {
-        "current_aware": 0.10114380258876848,
-        "inverse_current": 0.10313068337015045
+        "current_aware": 0.01319444041015014,
+        "inverse_current": 0.045644177366585804
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::R1": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "R1",
-      "mode": "current_aware",
-      "training_spectra": 2363,
+      "mode": "inverse_current",
+      "training_spectra": 1294,
       "candidate_scores": {
-        "current_aware": 0.1015953487679602,
-        "inverse_current": 0.10704306006822599
+        "current_aware": 0.0789036289832395,
+        "inverse_current": 0.07534314794781387
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE1_0": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "CPE1_0",
       "mode": "inverse_current",
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "candidate_scores": {
-        "current_aware": 0.0752104902806924,
-        "inverse_current": 0.06643633135783313
+        "current_aware": 0.07067488937136339,
+        "inverse_current": 0.06681076225123447
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE1_1": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "CPE1_1",
       "mode": "current_aware",
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "candidate_scores": {
-        "current_aware": 0.8248191155423129
+        "current_aware": 0.6308731381559363
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::R2": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "R2",
-      "mode": "current_aware",
-      "training_spectra": 2363,
+      "mode": "inverse_current",
+      "training_spectra": 1294,
       "candidate_scores": {
-        "current_aware": 0.1600040537664648,
-        "inverse_current": 0.15723380794281466
+        "current_aware": 0.17453064252668665,
+        "inverse_current": 0.1555306606313865
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE2_0": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "CPE2_0",
       "mode": "current_aware",
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "candidate_scores": {
-        "current_aware": 0.20674628885598578,
-        "inverse_current": 0.2122125025135369
+        "current_aware": 0.09328857734393141,
+        "inverse_current": 0.10881759517889371
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE2_1": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "CPE2_1",
       "mode": "current_aware",
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "candidate_scores": {
-        "current_aware": 1.2168728049319995
+        "current_aware": 0.3620894236876648
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::R3": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "R3",
-      "mode": "current_aware",
-      "training_spectra": 2363,
+      "mode": "inverse_current",
+      "training_spectra": 1294,
       "candidate_scores": {
-        "current_aware": 0.27311541257320726,
-        "inverse_current": 0.27128333348246364
+        "current_aware": 0.2021386647611118,
+        "inverse_current": 0.19357663215919968
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE3_0": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "CPE3_0",
       "mode": "current_aware",
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "candidate_scores": {
-        "current_aware": 0.4955708250452752,
-        "inverse_current": 0.4974599556914011
+        "current_aware": 0.6218800852415595,
+        "inverse_current": 0.6238472104104097
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE3_1": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "CPE3_1",
       "mode": "current_aware",
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "candidate_scores": {
-        "current_aware": 1.706289983823361
+        "current_aware": 1.5941029175377082
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R0": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "R0",
-      "mode": "current_aware",
-      "training_spectra": 1133,
+      "mode": "inverse_current",
+      "training_spectra": 712,
       "candidate_scores": {
-        "current_aware": 0.04928660894223927,
-        "inverse_current": 0.0491665727734968
+        "current_aware": 0.04077090887099919,
+        "inverse_current": 0.035135745675950104
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::L0": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "L0",
       "mode": "current_aware",
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "candidate_scores": {
-        "current_aware": 0.05424115731501838,
-        "inverse_current": 0.05333329463089238
+        "current_aware": 0.025030831117876136,
+        "inverse_current": 0.030571176381632797
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R1": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "R1",
       "mode": "current_aware",
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "candidate_scores": {
-        "current_aware": 0.1875653541511264,
-        "inverse_current": 0.18699004633598976
+        "current_aware": 0.19308130824212116,
+        "inverse_current": 0.19070978824901494
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE1_0": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE1_0",
       "mode": "current_aware",
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "candidate_scores": {
-        "current_aware": 0.18597119275729154,
-        "inverse_current": 0.18702490900978264
+        "current_aware": 0.27891527543442995,
+        "inverse_current": 0.28274037227528304
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE1_1": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE1_1",
       "mode": "current_aware",
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "candidate_scores": {
-        "current_aware": 3.277557479222142
+        "current_aware": 2.6335250734650035
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R2": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "R2",
       "mode": "current_aware",
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "candidate_scores": {
-        "current_aware": 0.10564879595720107,
-        "inverse_current": 0.1064617505734096
+        "current_aware": 0.12234008212089854,
+        "inverse_current": 0.12544318095935125
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE2_0": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE2_0",
-      "mode": "current_aware",
-      "training_spectra": 1259,
+      "mode": "inverse_current",
+      "training_spectra": 863,
       "candidate_scores": {
-        "current_aware": 0.1129452003567933,
-        "inverse_current": 0.11717411743612023
+        "current_aware": 0.13265709907556889,
+        "inverse_current": 0.1290504580912913
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE2_1": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE2_1",
       "mode": "current_aware",
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "candidate_scores": {
-        "current_aware": 0.31248302181097776
+        "current_aware": 0.3420082370431219
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R3": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "R3",
       "mode": "current_aware",
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "candidate_scores": {
-        "current_aware": 0.23391757903361554,
-        "inverse_current": 0.232800509529979
+        "current_aware": 0.26316519914723646,
+        "inverse_current": 0.26601650418425804
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE3_0": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE3_0",
       "mode": "current_aware",
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "candidate_scores": {
-        "current_aware": 0.3987364424814198,
-        "inverse_current": 0.39667284434323935
+        "current_aware": 0.524525245072183,
+        "inverse_current": 0.5265046844175295
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE3_1": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE3_1",
       "mode": "current_aware",
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "candidate_scores": {
-        "current_aware": 1.1327576567305848
+        "current_aware": 1.528163804306937
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R4": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "R4",
       "mode": "current_aware",
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "candidate_scores": {
-        "current_aware": 0.4108171546220446,
-        "inverse_current": 0.4092693715627189
+        "current_aware": 0.42391580860899436,
+        "inverse_current": 0.42334558599768063
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE4_0": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE4_0",
       "mode": "current_aware",
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "candidate_scores": {
-        "current_aware": 0.44930373459299516,
-        "inverse_current": 0.45123219429113975
+        "current_aware": 0.4365154227294588,
+        "inverse_current": 0.43681946246368963
       }
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE4_1": {
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE4_1",
       "mode": "current_aware",
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "candidate_scores": {
-        "current_aware": 3.3612475019465395
-      }
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::R0": {
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "R0",
-      "mode": "current_aware",
-      "training_spectra": 2,
-      "candidate_scores": {
-        "current_aware": Infinity
-      }
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::L0": {
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "L0",
-      "mode": "current_aware",
-      "training_spectra": 2,
-      "candidate_scores": {
-        "current_aware": Infinity
-      }
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::R1": {
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "R1",
-      "mode": "current_aware",
-      "training_spectra": 2,
-      "candidate_scores": {
-        "current_aware": Infinity
-      }
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::CPE1_0": {
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "CPE1_0",
-      "mode": "current_aware",
-      "training_spectra": 2,
-      "candidate_scores": {
-        "current_aware": Infinity
-      }
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::CPE1_1": {
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "CPE1_1",
-      "mode": "current_aware",
-      "training_spectra": 2,
-      "candidate_scores": {
-        "current_aware": Infinity
-      }
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::R2": {
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "R2",
-      "mode": "current_aware",
-      "training_spectra": 2,
-      "candidate_scores": {
-        "current_aware": Infinity
-      }
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::CPE2_0": {
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "CPE2_0",
-      "mode": "current_aware",
-      "training_spectra": 2,
-      "candidate_scores": {
-        "current_aware": Infinity
-      }
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::CPE2_1": {
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "CPE2_1",
-      "mode": "current_aware",
-      "training_spectra": 2,
-      "candidate_scores": {
-        "current_aware": Infinity
+        "current_aware": 2.3622010446423003
       }
     }
   },
   "parameter_limits": {
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::R0": {
       "level": 0.99,
-      "lower_residual": -0.16161577806835148,
-      "upper_residual": 0.21714093400435647,
+      "lower_residual": -0.1463951436787781,
+      "upper_residual": 0.08467065861718331,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 2259,
+      "training_spectra": 1012,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "R0",
-      "voltage_min": 1.3589827846035294,
-      "voltage_max": 1.7993583849485713,
-      "current_min": 5.727046125071765,
-      "current_max": 1431.4892804827018,
+      "voltage_min": 1.359270728335294,
+      "voltage_max": 1.6404077064864198,
+      "current_min": 6.642116928102353,
+      "current_max": 480.93959709616104,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.04758612474803695,
-        "inverse_current": 0.053648436652293845
+        "current_aware": 0.0427840877387648,
+        "inverse_current": 0.08155638477268251
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::L0": {
       "level": 0.99,
-      "lower_residual": -0.49856575376547996,
-      "upper_residual": 0.4640500006073215,
+      "lower_residual": -0.06864338218745067,
+      "upper_residual": 0.053476821481006104,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 2361,
+      "training_spectra": 1294,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "L0",
-      "voltage_min": 1.3589827846035294,
-      "voltage_max": 1.7993583849485713,
-      "current_min": 5.727046125071765,
-      "current_max": 1431.4892804827018,
+      "voltage_min": 1.3590461380364707,
+      "voltage_max": 1.7991493157014287,
+      "current_min": 6.487868179995295,
+      "current_max": 1940.8543491908445,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.10114380258876848,
-        "inverse_current": 0.10313068337015045
+        "current_aware": 0.01319444041015014,
+        "inverse_current": 0.045644177366585804
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::R1": {
       "level": 0.99,
-      "lower_residual": -0.7709401011845829,
-      "upper_residual": 0.8114575597205076,
+      "lower_residual": -0.7036013708907363,
+      "upper_residual": 0.4529372551266128,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "R1",
-      "voltage_min": 1.3589827846035294,
-      "voltage_max": 1.7993583849485713,
-      "current_min": 5.727046125071765,
-      "current_max": 1431.4892804827018,
+      "voltage_min": 1.3590461380364707,
+      "voltage_max": 1.7991493157014287,
+      "current_min": 6.487868179995295,
+      "current_max": 1940.8543491908445,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.1015953487679602,
-        "inverse_current": 0.10704306006822599
+        "current_aware": 0.0789036289832395,
+        "inverse_current": 0.07534314794781387
       },
-      "selected_mode": "current_aware"
+      "selected_mode": "inverse_current"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE1_0": {
       "level": 0.99,
-      "lower_residual": -0.49675070276430866,
-      "upper_residual": 0.3225312676124113,
+      "lower_residual": -0.3238238869369161,
+      "upper_residual": 0.3252564362266976,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "CPE1_0",
-      "voltage_min": 1.3589827846035294,
-      "voltage_max": 1.7993583849485713,
-      "current_min": 5.727046125071765,
-      "current_max": 1431.4892804827018,
+      "voltage_min": 1.3590461380364707,
+      "voltage_max": 1.7991493157014287,
+      "current_min": 6.487868179995295,
+      "current_max": 1940.8543491908445,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.0752104902806924,
-        "inverse_current": 0.06643633135783313
+        "current_aware": 0.07067488937136339,
+        "inverse_current": 0.06681076225123447
       },
       "selected_mode": "inverse_current"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE1_1": {
       "level": 0.99,
-      "lower_residual": -16.257765518687993,
-      "upper_residual": 4.7167672995453,
+      "lower_residual": -4.922654666403701,
+      "upper_residual": 2.085378758767159,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "CPE1_1",
-      "voltage_min": 1.3589827846035294,
-      "voltage_max": 1.7993583849485713,
-      "current_min": 5.727046125071765,
-      "current_max": 1431.4892804827018,
+      "voltage_min": 1.3590461380364707,
+      "voltage_max": 1.7991493157014287,
+      "current_min": 6.487868179995295,
+      "current_max": 1940.8543491908445,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.8248191155423129
+        "current_aware": 0.6308731381559363
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::R2": {
       "level": 0.99,
-      "lower_residual": -0.7409497889828031,
-      "upper_residual": 0.6897386980185961,
+      "lower_residual": -1.046386742299425,
+      "upper_residual": 0.6528739094217092,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "R2",
-      "voltage_min": 1.3589827846035294,
-      "voltage_max": 1.7993583849485713,
-      "current_min": 5.727046125071765,
-      "current_max": 1431.4892804827018,
+      "voltage_min": 1.3590461380364707,
+      "voltage_max": 1.7991493157014287,
+      "current_min": 6.487868179995295,
+      "current_max": 1940.8543491908445,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.1600040537664648,
-        "inverse_current": 0.15723380794281466
+        "current_aware": 0.17453064252668665,
+        "inverse_current": 0.1555306606313865
       },
-      "selected_mode": "current_aware"
+      "selected_mode": "inverse_current"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE2_0": {
       "level": 0.99,
-      "lower_residual": -0.8465432105324755,
-      "upper_residual": 0.6485209236018253,
+      "lower_residual": -0.4312086243434421,
+      "upper_residual": 0.4429588257812508,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "CPE2_0",
-      "voltage_min": 1.3589827846035294,
-      "voltage_max": 1.7993583849485713,
-      "current_min": 5.727046125071765,
-      "current_max": 1431.4892804827018,
+      "voltage_min": 1.3590461380364707,
+      "voltage_max": 1.7991493157014287,
+      "current_min": 6.487868179995295,
+      "current_max": 1940.8543491908445,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.20674628885598578,
-        "inverse_current": 0.2122125025135369
+        "current_aware": 0.09328857734393141,
+        "inverse_current": 0.10881759517889371
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE2_1": {
       "level": 0.99,
-      "lower_residual": -12.71476968535726,
-      "upper_residual": 6.247148821541844,
+      "lower_residual": -1.8114880504920217,
+      "upper_residual": 1.4990555276477735,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "CPE2_1",
-      "voltage_min": 1.3589827846035294,
-      "voltage_max": 1.7993583849485713,
-      "current_min": 5.727046125071765,
-      "current_max": 1431.4892804827018,
+      "voltage_min": 1.3590461380364707,
+      "voltage_max": 1.7991493157014287,
+      "current_min": 6.487868179995295,
+      "current_max": 1940.8543491908445,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 1.2168728049319995
+        "current_aware": 0.3620894236876648
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::R3": {
       "level": 0.99,
-      "lower_residual": -1.2437247909365279,
-      "upper_residual": 1.3403162143998937,
+      "lower_residual": -0.8233241716948191,
+      "upper_residual": 0.9880886859503774,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "R3",
-      "voltage_min": 1.3589827846035294,
-      "voltage_max": 1.7993583849485713,
-      "current_min": 5.727046125071765,
-      "current_max": 1431.4892804827018,
+      "voltage_min": 1.3590461380364707,
+      "voltage_max": 1.7991493157014287,
+      "current_min": 6.487868179995295,
+      "current_max": 1940.8543491908445,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.27311541257320726,
-        "inverse_current": 0.27128333348246364
+        "current_aware": 0.2021386647611118,
+        "inverse_current": 0.19357663215919968
       },
-      "selected_mode": "current_aware"
+      "selected_mode": "inverse_current"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE3_0": {
       "level": 0.99,
-      "lower_residual": -1.9143742439532758,
-      "upper_residual": 2.3985202270710895,
+      "lower_residual": -2.1753638431566964,
+      "upper_residual": 2.603236628274869,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "CPE3_0",
-      "voltage_min": 1.3589827846035294,
-      "voltage_max": 1.7993583849485713,
-      "current_min": 5.727046125071765,
-      "current_max": 1431.4892804827018,
+      "voltage_min": 1.3590461380364707,
+      "voltage_max": 1.7991493157014287,
+      "current_min": 6.487868179995295,
+      "current_max": 1940.8543491908445,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.4955708250452752,
-        "inverse_current": 0.4974599556914011
+        "current_aware": 0.6218800852415595,
+        "inverse_current": 0.6238472104104097
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)::CPE3_1": {
       "level": 0.99,
-      "lower_residual": -15.84721137551595,
-      "upper_residual": 5.638673187085692,
+      "lower_residual": -10.387923278099457,
+      "upper_residual": 6.231216532623257,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 2363,
+      "training_spectra": 1294,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)",
       "parameter": "CPE3_1",
-      "voltage_min": 1.3589827846035294,
-      "voltage_max": 1.7993583849485713,
-      "current_min": 5.727046125071765,
-      "current_max": 1431.4892804827018,
+      "voltage_min": 1.3590461380364707,
+      "voltage_max": 1.7991493157014287,
+      "current_min": 6.487868179995295,
+      "current_max": 1940.8543491908445,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 1.706289983823361
+        "current_aware": 1.5941029175377082
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R0": {
       "level": 0.99,
-      "lower_residual": -0.15351545465324834,
-      "upper_residual": 0.20531579646406084,
+      "lower_residual": -0.1299208539797994,
+      "upper_residual": 0.1538886154790054,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1133,
+      "training_spectra": 712,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "R0",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.04928660894223927,
-        "inverse_current": 0.0491665727734968
+        "current_aware": 0.04077090887099919,
+        "inverse_current": 0.035135745675950104
       },
-      "selected_mode": "current_aware"
+      "selected_mode": "inverse_current"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::L0": {
       "level": 0.99,
-      "lower_residual": -0.21971585083468453,
-      "upper_residual": 0.22751086576718688,
+      "lower_residual": -0.08933755164224687,
+      "upper_residual": 0.10654485176582018,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "L0",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.05424115731501838,
-        "inverse_current": 0.05333329463089238
+        "current_aware": 0.025030831117876136,
+        "inverse_current": 0.030571176381632797
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R1": {
       "level": 0.99,
-      "lower_residual": -0.8520492522661671,
-      "upper_residual": 0.9181923397877864,
+      "lower_residual": -0.9109618171741063,
+      "upper_residual": 1.0660598620840687,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "R1",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.1875653541511264,
-        "inverse_current": 0.18699004633598976
+        "current_aware": 0.19308130824212116,
+        "inverse_current": 0.19070978824901494
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE1_0": {
       "level": 0.99,
-      "lower_residual": -1.0335807187158403,
-      "upper_residual": 0.7219055163947492,
+      "lower_residual": -1.339232378826205,
+      "upper_residual": 1.4901268014128735,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE1_0",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.18597119275729154,
-        "inverse_current": 0.18702490900978264
+        "current_aware": 0.27891527543442995,
+        "inverse_current": 0.28274037227528304
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE1_1": {
       "level": 0.99,
-      "lower_residual": -13.805380888892092,
-      "upper_residual": 9.907436654182469,
+      "lower_residual": -10.065565098097425,
+      "upper_residual": 7.533687503791448,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE1_1",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 3.277557479222142
+        "current_aware": 2.6335250734650035
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R2": {
       "level": 0.99,
-      "lower_residual": -0.3587398973202618,
-      "upper_residual": 0.6431970502700315,
+      "lower_residual": -0.4065661518116992,
+      "upper_residual": 0.7891641471351365,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "R2",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.10564879595720107,
-        "inverse_current": 0.1064617505734096
+        "current_aware": 0.12234008212089854,
+        "inverse_current": 0.12544318095935125
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE2_0": {
       "level": 0.99,
-      "lower_residual": -0.6432091089041939,
-      "upper_residual": 0.4506155466086256,
+      "lower_residual": -0.677987467794489,
+      "upper_residual": 0.549266200182034,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE2_0",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.1129452003567933,
-        "inverse_current": 0.11717411743612023
+        "current_aware": 0.13265709907556889,
+        "inverse_current": 0.1290504580912913
       },
-      "selected_mode": "current_aware"
+      "selected_mode": "inverse_current"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE2_1": {
       "level": 0.99,
-      "lower_residual": -1.7403136644379718,
-      "upper_residual": 1.3752517514084799,
+      "lower_residual": -1.3578075755198067,
+      "upper_residual": 1.5606436200170841,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE2_1",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.31248302181097776
+        "current_aware": 0.3420082370431219
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R3": {
       "level": 0.99,
-      "lower_residual": -0.764442019753119,
-      "upper_residual": 1.0508762595780303,
+      "lower_residual": -0.8162666567657064,
+      "upper_residual": 1.0737658598353614,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "R3",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.23391757903361554,
-        "inverse_current": 0.232800509529979
+        "current_aware": 0.26316519914723646,
+        "inverse_current": 0.26601650418425804
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE3_0": {
       "level": 0.99,
-      "lower_residual": -1.513522201635944,
-      "upper_residual": 2.106916658726312,
+      "lower_residual": -1.5845251610512205,
+      "upper_residual": 2.4256899992252543,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE3_0",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.3987364424814198,
-        "inverse_current": 0.39667284434323935
+        "current_aware": 0.524525245072183,
+        "inverse_current": 0.5265046844175295
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE3_1": {
       "level": 0.99,
-      "lower_residual": -9.666311684561542,
-      "upper_residual": 3.4597615299765274,
+      "lower_residual": -9.948231289277189,
+      "upper_residual": 4.6255568831212,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE3_1",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 1.1327576567305848
+        "current_aware": 1.528163804306937
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::R4": {
       "level": 0.99,
-      "lower_residual": -3.3344394161776343,
-      "upper_residual": 2.293523949515155,
+      "lower_residual": -3.2967253494649436,
+      "upper_residual": 2.1223458197107825,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "R4",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.4108171546220446,
-        "inverse_current": 0.4092693715627189
+        "current_aware": 0.42391580860899436,
+        "inverse_current": 0.42334558599768063
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE4_0": {
       "level": 0.99,
-      "lower_residual": -2.243296440734581,
-      "upper_residual": 1.9870932412488753,
+      "lower_residual": -1.9564400497671,
+      "upper_residual": 2.266782655435429,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE4_0",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 0.44930373459299516,
-        "inverse_current": 0.45123219429113975
+        "current_aware": 0.4365154227294588,
+        "inverse_current": 0.43681946246368963
       },
       "selected_mode": "current_aware"
     },
     "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)::CPE4_1": {
       "level": 0.99,
-      "lower_residual": -9.168699117531254,
-      "upper_residual": 15.924575125154293,
+      "lower_residual": -8.696625421525505,
+      "upper_residual": 12.734483732242852,
       "method": "LOSO_transformed_residual_interval_expanded",
       "interval_quantiles": [
         0.01,
         0.99
       ],
       "interval_expansion": 1.5,
-      "training_spectra": 1259,
+      "training_spectra": 863,
       "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)-p(R3,CPE3)-p(R4,CPE4)",
       "parameter": "CPE4_1",
       "voltage_min": 1.5400184084376474,
       "voltage_max": 1.9006562062685715,
-      "current_min": 159.0674641927074,
+      "current_min": 211.11879164751412,
       "current_max": 3784.663643973216,
       "reliability": "high",
       "candidate_scores": {
-        "current_aware": 3.3612475019465395
-      },
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::R0": {
-      "level": 0.99,
-      "lower_residual": 0.0,
-      "upper_residual": 0.0,
-      "method": "LOSO_transformed_residual_interval_expanded",
-      "interval_quantiles": [
-        0.01,
-        0.99
-      ],
-      "interval_expansion": 1.5,
-      "training_spectra": 2,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "R0",
-      "voltage_min": 1.3991237149552942,
-      "voltage_max": 1.4191228782447058,
-      "current_min": 6.986110513342354,
-      "current_max": 7.392090455218824,
-      "reliability": "low_sparse",
-      "candidate_scores": {
-        "current_aware": Infinity
-      },
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::L0": {
-      "level": 0.99,
-      "lower_residual": 0.0,
-      "upper_residual": 0.0,
-      "method": "LOSO_transformed_residual_interval_expanded",
-      "interval_quantiles": [
-        0.01,
-        0.99
-      ],
-      "interval_expansion": 1.5,
-      "training_spectra": 2,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "L0",
-      "voltage_min": 1.3991237149552942,
-      "voltage_max": 1.4191228782447058,
-      "current_min": 6.986110513342354,
-      "current_max": 7.392090455218824,
-      "reliability": "low_sparse",
-      "candidate_scores": {
-        "current_aware": Infinity
-      },
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::R1": {
-      "level": 0.99,
-      "lower_residual": 0.0,
-      "upper_residual": 0.0,
-      "method": "LOSO_transformed_residual_interval_expanded",
-      "interval_quantiles": [
-        0.01,
-        0.99
-      ],
-      "interval_expansion": 1.5,
-      "training_spectra": 2,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "R1",
-      "voltage_min": 1.3991237149552942,
-      "voltage_max": 1.4191228782447058,
-      "current_min": 6.986110513342354,
-      "current_max": 7.392090455218824,
-      "reliability": "low_sparse",
-      "candidate_scores": {
-        "current_aware": Infinity
-      },
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::CPE1_0": {
-      "level": 0.99,
-      "lower_residual": 0.0,
-      "upper_residual": 0.0,
-      "method": "LOSO_transformed_residual_interval_expanded",
-      "interval_quantiles": [
-        0.01,
-        0.99
-      ],
-      "interval_expansion": 1.5,
-      "training_spectra": 2,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "CPE1_0",
-      "voltage_min": 1.3991237149552942,
-      "voltage_max": 1.4191228782447058,
-      "current_min": 6.986110513342354,
-      "current_max": 7.392090455218824,
-      "reliability": "low_sparse",
-      "candidate_scores": {
-        "current_aware": Infinity
-      },
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::CPE1_1": {
-      "level": 0.99,
-      "lower_residual": 0.0,
-      "upper_residual": 0.0,
-      "method": "LOSO_transformed_residual_interval_expanded",
-      "interval_quantiles": [
-        0.01,
-        0.99
-      ],
-      "interval_expansion": 1.5,
-      "training_spectra": 2,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "CPE1_1",
-      "voltage_min": 1.3991237149552942,
-      "voltage_max": 1.4191228782447058,
-      "current_min": 6.986110513342354,
-      "current_max": 7.392090455218824,
-      "reliability": "low_sparse",
-      "candidate_scores": {
-        "current_aware": Infinity
-      },
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::R2": {
-      "level": 0.99,
-      "lower_residual": 0.0,
-      "upper_residual": 0.0,
-      "method": "LOSO_transformed_residual_interval_expanded",
-      "interval_quantiles": [
-        0.01,
-        0.99
-      ],
-      "interval_expansion": 1.5,
-      "training_spectra": 2,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "R2",
-      "voltage_min": 1.3991237149552942,
-      "voltage_max": 1.4191228782447058,
-      "current_min": 6.986110513342354,
-      "current_max": 7.392090455218824,
-      "reliability": "low_sparse",
-      "candidate_scores": {
-        "current_aware": Infinity
-      },
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::CPE2_0": {
-      "level": 0.99,
-      "lower_residual": 0.0,
-      "upper_residual": 0.0,
-      "method": "LOSO_transformed_residual_interval_expanded",
-      "interval_quantiles": [
-        0.01,
-        0.99
-      ],
-      "interval_expansion": 1.5,
-      "training_spectra": 2,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "CPE2_0",
-      "voltage_min": 1.3991237149552942,
-      "voltage_max": 1.4191228782447058,
-      "current_min": 6.986110513342354,
-      "current_max": 7.392090455218824,
-      "reliability": "low_sparse",
-      "candidate_scores": {
-        "current_aware": Infinity
-      },
-      "selected_mode": "current_aware"
-    },
-    "R0-L0-p(R1,CPE1)-p(R2,CPE2)::CPE2_1": {
-      "level": 0.99,
-      "lower_residual": 0.0,
-      "upper_residual": 0.0,
-      "method": "LOSO_transformed_residual_interval_expanded",
-      "interval_quantiles": [
-        0.01,
-        0.99
-      ],
-      "interval_expansion": 1.5,
-      "training_spectra": 2,
-      "topology": "R0-L0-p(R1,CPE1)-p(R2,CPE2)",
-      "parameter": "CPE2_1",
-      "voltage_min": 1.3991237149552942,
-      "voltage_max": 1.4191228782447058,
-      "current_min": 6.986110513342354,
-      "current_max": 7.392090455218824,
-      "reliability": "low_sparse",
-      "candidate_scores": {
-        "current_aware": Infinity
+        "current_aware": 2.3622010446423003
       },
       "selected_mode": "current_aware"
     }
   },
   "frequency_target_source": "active_points",
   "invalid_saved_frequency_windows_allowed": true,
-  "frequency_active_point_records": 3624,
+  "frequency_active_point_records": 2157,
   "frequency_active_bounds_min_hz": 0.5003522635000001,
-  "frequency_active_bounds_max_hz": 50660.62890625,
-  "frequency_target_center_min_decades": 1.8665398349098488,
-  "frequency_target_center_max_decades": 2.799939426485379,
+  "frequency_active_bounds_max_hz": 68261.953125,
+  "frequency_target_center_min_decades": 1.9332544890561696,
+  "frequency_target_center_max_decades": 2.766504888949886,
   "validation": {
     "mode": "leave_one_sample_out_provenance",
     "loso_available": true,
     "warning": null
   },
   "gui_model_key": "AEM-WE",
-  "artifact": "ml/analysis/number_aware_pipeline_aem_we/pipeline.joblib"
+  "artifact": "ml\\analysis\\number_aware_pipeline_aem_we\\pipeline.joblib"
 }
